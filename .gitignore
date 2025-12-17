@@ -1,0 +1,18 @@
+node_modules/
+temp/
+.vscode/
+.DS_Store
+npm/
+package-lock.json
+.env
+upload.md
+serverjs.md
+replacements.txt
+* copy*.js
+*-copy*.js
+*-copy*.db
+* copy*.db
+*.db
+reset-db.js
+
+DISCORD_OAUTH_SETUP.md
