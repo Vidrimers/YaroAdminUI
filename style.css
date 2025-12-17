@@ -1,0 +1,98 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+body {
+  font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+  color: #e0e0e0;
+  min-height: 100vh;
+  padding: 20px;
+}
+.header {
+  text-align: center;
+  margin-bottom: 30px;
+  padding: 20px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+.header h1 {
+  color: #667eea;
+  font-size: 2em;
+  margin-bottom: 10px;
+}
+.header p {
+  color: #888;
+  font-size: 0.9em;
+}
+.container {
+  max-width: 1600px;
+  margin: 0 auto;
+}
+.log-entry {
+  background: rgba(255, 255, 255, 0.03);
+  border-left: 4px solid #667eea;
+  padding: 15px 20px;
+  margin-bottom: 10px;
+  border-radius: 0 8px 8px 0;
+  transition: all 0.3s ease;
+}
+.log-entry:hover {
+  background: rgba(255, 255, 255, 0.08);
+  transform: translateX(5px);
+}
+.log-entry.bet-placed {
+  border-left-color: #4caf50;
+}
+.log-entry.bet-deleted {
+  border-left-color: #f44336;
+}
+.log-entry.settings-changed {
+  border-left-color: #ff9800;
+}
+.log-time {
+  color: #888;
+  font-size: 0.85em;
+  margin-bottom: 5px;
+}
+.log-action {
+  font-weight: bold;
+  margin-bottom: 8px;
+}
+.log-action.placed {
+  color: #4caf50;
+}
+.log-action.deleted {
+  color: #f44336;
+}
+.log-action.settings {
+  color: #ff9800;
+}
+.log-details {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 10px;
+  font-size: 0.9em;
+}
+.log-details span {
+  padding: 5px 10px;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 4px;
+}
+.log-details .user {
+  color: #64b5f6;
+}
+.log-details .prediction {
+  color: #ffb74d;
+}
+.log-details .match {
+  color: #81c784;
+}
+.log-details .event {
+  color: #ce93d8;
+}
+.log-details .setting {
+  color: #ffcc80;
+}
