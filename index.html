@@ -3,14 +3,284 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Yaro adminUI</title>
+    <title>Yaro adminUI - Управление сервером</title>
     <link rel="stylesheet" href="style.css" />
   </head>
   <body>
-    <div class="header">
-      <h1>📋 Yaro adminUI</h1>
-      <p></p>
+    <!-- AUTH SCREEN -->
+    <div id="authScreen" class="auth-screen">
+      <div class="auth-container">
+        <div class="auth-header">
+          <h1>🔐 YaroAdminUI</h1>
+          <p>Вход через SSH-ключ или WebAuthn</p>
+        </div>
+
+        <div class="auth-tabs">
+          <button class="auth-tab active" data-tab="ssh-auth">SSH Ключ</button>
+          <button class="auth-tab" data-tab="webauthn-auth">WebAuthn</button>
+          <button class="auth-tab" data-tab="telegram-auth">Telegram</button>
+        </div>
+
+        <!-- SSH Auth Tab -->
+        <div id="ssh-auth" class="auth-tab-content active">
+          <form id="sshAuthForm" class="auth-form">
+            <div class="form-group">
+              <label for="sshMessage">SSH Сообщение для подписи:</label>
+              <textarea
+                id="sshMessage"
+                class="form-control"
+                readonly
+              ></textarea>
+              <button
+                type="button"
+                id="generateMessageBtn"
+                class="btn btn-primary btn-sm"
+              >
+                Сгенерировать
+              </button>
+            </div>
+
+            <div class="form-group">
+              <label for="sshSignature">Подпись (base64):</label>
+              <textarea
+                id="sshSignature"
+                class="form-control"
+                placeholder="Вставьте подпись от ssh-keygen -Y sign"
+              ></textarea>
+            </div>
+
+            <button type="submit" class="btn btn-success btn-block">
+              Вход через SSH
+            </button>
+          </form>
+        </div>
+
+        <!-- WebAuthn Auth Tab -->
+        <div id="webauthn-auth" class="auth-tab-content">
+          <form id="webauthnAuthForm" class="auth-form">
+            <div class="form-group">
+              <label for="username">Имя пользователя:</label>
+              <input
+                type="text"
+                id="username"
+                class="form-control"
+                placeholder="admin"
+              />
+            </div>
+
+            <button
+              type="button"
+              id="webauthnRegisterBtn"
+              class="btn btn-secondary btn-block"
+            >
+              Зарегистрировать ключ
+            </button>
+            <button type="submit" class="btn btn-success btn-block">
+              Вход WebAuthn
+            </button>
+          </form>
+        </div>
+
+        <!-- Telegram Auth Tab -->
+        <div id="telegram-auth" class="auth-tab-content">
+          <div class="telegram-auth-info">
+            <p>📱 Отправьте команду боту в Telegram:</p>
+            <code>/auth_code {YOUR_CODE}</code>
+            <div class="form-group">
+              <input
+                type="text"
+                id="telegramCode"
+                class="form-control"
+                placeholder="Введите код из Telegram"
+              />
+            </div>
+            <button
+              type="button"
+              id="telegramAuthBtn"
+              class="btn btn-success btn-block"
+            >
+              Подтвердить код
+            </button>
+          </div>
+        </div>
+
+        <div
+          id="authError"
+          class="alert alert-danger"
+          style="display: none"
+        ></div>
+      </div>
     </div>
-    <div class="container">вы</div>
+
+    <!-- MAIN DASHBOARD -->
+    <div id="dashboard" class="dashboard" style="display: none">
+      <!-- HEADER -->
+      <div class="header">
+        <div class="header-content">
+          <h1>📋 YaroAdminUI</h1>
+          <p id="userInfo">Вы вошли как: <span id="username">Admin</span></p>
+        </div>
+        <button id="logoutBtn" class="btn btn-danger">Выход</button>
+      </div>
+
+      <!-- CONTAINER WITH CARDS -->
+      <div class="container">
+        <!-- SERVER STATUS CARD -->
+        <div class="card">
+          <div class="card-header">
+            <h2>🖥️ Статус сервера</h2>
+          </div>
+          <div class="card-body">
+            <div class="status-item">
+              <span>IP адрес:</span>
+              <strong id="serverIP">-</strong>
+            </div>
+            <div class="status-item">
+              <span>Статус:</span>
+              <strong id="serverStatus" class="status-online">🟢 Online</strong>
+            </div>
+            <div class="status-item">
+              <span>Время жизни:</span>
+              <strong id="serverUptime">-</strong>
+            </div>
+            <div class="status-item">
+              <span>CPU использование:</span>
+              <strong id="cpuUsage">-</strong>
+            </div>
+            <div class="status-item">
+              <span>RAM использование:</span>
+              <strong id="ramUsage">-</strong>
+            </div>
+          </div>
+        </div>
+
+        <!-- SYSTEM COMMANDS CARD -->
+        <div class="card">
+          <div class="card-header">
+            <h2>⚙️ Управление системой</h2>
+          </div>
+          <div class="card-body">
+            <div class="btn-group">
+              <button class="btn btn-warning" data-action="restart-ssh">
+                🔄 Перезагрузить SSH
+              </button>
+              <button class="btn btn-info" data-action="check-disk">
+                💾 Проверить диск
+              </button>
+              <button class="btn btn-warning" data-action="restart-service">
+                🔄 Рестарт сервиса
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- SERVICES CARD -->
+        <div class="card">
+          <div class="card-header">
+            <h2>🚀 Сервисы</h2>
+          </div>
+          <div class="card-body">
+            <div id="servicesList" class="services-list">
+              <div class="service-item">
+                <span>SSH</span>
+                <span class="status-badge status-running">Запущен</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- LOGS CARD -->
+        <div class="card">
+          <div class="card-header">
+            <h2>📝 Логи операций</h2>
+          </div>
+          <div class="card-body">
+            <div
+              id="logsList"
+              class="logs-list"
+              style="max-height: 300px; overflow-y: auto"
+            >
+              <p class="text-muted">Нет логов</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- SSH KEY MANAGEMENT CARD -->
+        <div class="card">
+          <div class="card-header">
+            <h2>🔑 Управление SSH ключами</h2>
+          </div>
+          <div class="card-body">
+            <form id="sshKeyForm" class="form">
+              <div class="form-group">
+                <label for="newSshKey">Добавить новый ключ:</label>
+                <textarea
+                  id="newSshKey"
+                  class="form-control"
+                  placeholder="ssh-ed25519 AAAA..."
+                ></textarea>
+              </div>
+              <button type="submit" class="btn btn-success">
+                Добавить ключ
+              </button>
+            </form>
+            <hr />
+            <h4>Текущие ключи:</h4>
+            <div id="keysList" class="keys-list">
+              <p class="text-muted">Загружаем ключи...</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- FIREWALL CARD -->
+        <div class="card">
+          <div class="card-header">
+            <h2>🔥 Firewall</h2>
+          </div>
+          <div class="card-body">
+            <form id="firewallForm" class="form">
+              <div class="form-group">
+                <label for="fwPort">Порт:</label>
+                <input
+                  type="number"
+                  id="fwPort"
+                  class="form-control"
+                  placeholder="22"
+                  min="1"
+                  max="65535"
+                />
+              </div>
+              <div class="form-group">
+                <label for="fwAction">Действие:</label>
+                <select id="fwAction" class="form-control">
+                  <option value="allow">Разрешить</option>
+                  <option value="deny">Запретить</option>
+                </select>
+              </div>
+              <button type="submit" class="btn btn-warning">
+                Применить правило
+              </button>
+            </form>
+          </div>
+        </div>
+
+        <!-- NOTIFICATIONS CARD -->
+        <div class="card">
+          <div class="card-header">
+            <h2>🔔 Уведомления</h2>
+          </div>
+          <div class="card-body">
+            <div id="notificationsList" class="notifications-list">
+              <p class="text-muted">Нет уведомлений</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TOAST NOTIFICATIONS -->
+    <div id="toastContainer" class="toast-container"></div>
+
+    <script src="adminui_client.js"></script>
   </body>
 </html>

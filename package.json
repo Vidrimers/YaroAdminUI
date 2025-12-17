@@ -2,16 +2,24 @@
   "name": "yaroadminUI",
   "version": "1.0.0",
   "description": "Простая админка для управления сервером через веб-интерфейс и телеграм-бота",
-  "main": "server.js",
+  "main": "adminui.js",
   "type": "module",
   "scripts": {
-    "start": "node server.js",
-    "dev": "node server.js"
+    "start": "node adminui.js",
+    "dev": "node adminui.js",
+    "bot": "node adminuibot.js",
+    "both": "concurrently \"node adminui.js\" \"node adminuibot.js\""
   },
   "dependencies": {
     "better-sqlite3": "^12.5.0",
+    "cors": "^2.8.5",
     "dotenv": "^17.2.3",
     "express": "^5.2.1",
-    "node-telegram-bot-api": "^0.67.0"
+    "jsonwebtoken": "^9.0.3",
+    "node-telegram-bot-api": "^0.67.0",
+    "ssh2": "^1.17.0"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1"
   }
 }
