@@ -470,10 +470,16 @@ class UIController {
         }
 
         try {
-          await this.api.executeCommand("firewall", [port, action]);
+          const result = await this.api.executeCommand("firewall", [
+            port,
+            action,
+          ]);
           this.toast.success(
             `Правило firewall применено: порт ${port} - ${action}`
           );
+          if (result && result.output) {
+            this.toast.info(`Результат: ${result.output}`);
+          }
         } catch (error) {
           this.toast.error("Ошибка: " + error.message);
         }
