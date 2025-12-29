@@ -120,13 +120,101 @@
           <h1>📋 YaroAdminUI</h1>
           <p id="userInfo">Вы вошли как: <span id="username">Admin</span></p>
         </div>
-        <button id="logoutBtn" class="btn btn-danger">Выход</button>
+        <div class="header-controls">
+          <div class="theme-dropdown">
+            <button
+              id="themeToggle"
+              class="btn btn-primary"
+              title="Выбрать тему"
+            >
+              🎨 Тема
+            </button>
+            <div id="themeMenu" class="theme-menu" style="display: none">
+              <button
+                class="theme-option"
+                id="themeDefault"
+                data-theme="default"
+              >
+                Default
+              </button>
+              <button
+                class="theme-option"
+                id="themeHackerGreen"
+                data-theme="hacker-green"
+              >
+                🟢 Hacker Green
+              </button>
+              <button
+                class="theme-option"
+                id="themeSolarized"
+                data-theme="solarized"
+              >
+                ☀️ Solarized
+              </button>
+              <button class="theme-option" id="themeMatrix" data-theme="matrix">
+                🟢 Matrix
+              </button>
+              <button
+                class="theme-option"
+                id="themeCyberpunk"
+                data-theme="cyberpunk"
+              >
+                💜 Cyberpunk
+              </button>
+            </div>
+          </div>
+          <div class="notifications-dropdown">
+            <button
+              id="notificationsToggle"
+              class="btn btn-info"
+              title="Уведомления"
+            >
+              🔔
+              <span
+                id="notificationsCount"
+                class="notification-badge"
+                style="display: none"
+                >0</span
+              >
+            </button>
+            <div
+              id="notificationsMenu"
+              class="notifications-menu"
+              style="display: none"
+            >
+              <div id="notificationsList" class="notifications-list-header">
+                <p class="text-muted">Нет уведомлений</p>
+              </div>
+            </div>
+          </div>
+          <div class="system-dropdown">
+            <button
+              id="systemToggle"
+              class="btn btn-warning"
+              title="Управление системой"
+            >
+              ⚙️
+            </button>
+            <div id="systemMenu" class="system-menu" style="display: none">
+              <button class="system-option" data-action="restart-ssh">
+                🔄 Перезагрузить SSH
+              </button>
+              <button class="system-option" data-action="check-disk">
+                💾 Проверить диск
+              </button>
+              <button class="system-option" data-action="restart-service">
+                🔄 Рестарт сервиса
+              </button>
+            </div>
+          </div>
+          <button id="logoutBtn" class="btn btn-danger">Выход</button>
+        </div>
       </div>
 
       <!-- CONTAINER WITH CARDS -->
-      <div class="container">
+      <div class="container" id="cardsContainer">
         <!-- SERVER STATUS CARD -->
-        <div class="card">
+        <div class="card" draggable="true">
           <div class="card-header">
             <h2>🖥️ Статус сервера</h2>
           </div>
@@ -154,43 +242,115 @@
           </div>
         </div>
 
-        <!-- SYSTEM COMMANDS CARD -->
-        <div class="card">
+        <!-- SCREEN PROCESSES CARD -->
+        <div class="card" draggable="true">
           <div class="card-header">
-            <h2>⚙️ Управление системой</h2>
+            <h2>📺 Screen сессии</h2>
+            <button
+              id="screenRefreshBtn"
+              class="btn btn-sm btn-info"
+              style="margin-left: auto"
+            >
+              🔄 Обновить
+            </button>
           </div>
           <div class="card-body">
-            <div class="btn-group">
-              <button class="btn btn-warning" data-action="restart-ssh">
-                🔄 Перезагрузить SSH
-              </button>
-              <button class="btn btn-info" data-action="check-disk">
-                💾 Проверить диск
-              </button>
-              <button class="btn btn-warning" data-action="restart-service">
-                🔄 Рестарт сервиса
-              </button>
+            <div
+              id="screenProcessesList"
+              style="display: flex; flex-direction: column; gap: 8px"
+            >
+              <p class="text-muted">Загрузка...</p>
             </div>
           </div>
         </div>
 
-        <!-- SERVICES CARD -->
-        <div class="card">
+        <!-- SERVICES AND PM2 CARD -->
+        <div class="card" draggable="true">
           <div class="card-header">
             <h2>🚀 Сервисы</h2>
           </div>
           <div class="card-body">
-            <div id="servicesList" class="services-list">
-              <div class="service-item">
-                <span>SSH</span>
-                <span class="status-badge status-running">Запущен</span>
-              </div>
+            <h4>Systemctl сервисы:</h4>
+            <div id="systemctlList" class="services-list">
+              <p class="text-muted">Загружаем сервисы...</p>
+            </div>
+
+            <hr style="margin: 20px 0" />
+
+            <h4>PM2 процессы:</h4>
+            <div id="pm2List" class="services-list">
+              <p class="text-muted">Нет PM2 процессов или PM2 не установлен</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- SCRIPTS CARD -->
+        <div class="card" draggable="true">
+          <div class="card-header">
+            <h2>📜 Скрипты</h2>
+          </div>
+          <div class="card-body">
+            <div id="scriptsList" class="scripts-list">
+              <p class="text-muted">Загружаем скрипты...</p>
+            </div>
+            <div
+              id="scriptsInfo"
+              class="text-muted"
+              style="margin-top: 15px; font-size: 0.9em"
+            >
+              Скрипты будут загружены при открытии панели.
+            </div>
+          </div>
+        </div>
+
+        <!-- PORTS CARD -->
+        <div class="card" draggable="true">
+          <div class="card-header">
+            <h2>🔌 Открытые порты</h2>
+            <button
+              id="refreshPorts"
+              class="btn btn-small"
+              title="Обновить список портов"
+            >
+              🔄
+            </button>
+          </div>
+          <div class="card-body">
+            <div
+              id="portsList"
+              class="ports-list"
+              style="max-height: 100%; overflow-y: auto"
+            >
+              <p class="text-muted">Загружаем порты...</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- PROCESSES CARD -->
+        <div class="card" draggable="true">
+          <div class="card-header">
+            <h2>⚙️ Процессы (Top 30)</h2>
+            <button
+              id="refreshProcesses"
+              class="btn btn-small"
+              style="margin-left: auto"
+            >
+              🔄 Обновить
+            </button>
+          </div>
+          <div class="card-body">
+            <div
+              id="processesList"
+              class="processes-list"
+              style="max-height: 500px; overflow-y: auto"
+            >
+              <p class="text-muted">Загружаем процессы...</p>
             </div>
           </div>
         </div>
 
         <!-- LOGS CARD -->
-        <div class="card">
+        <div class="card" draggable="true">
           <div class="card-header">
             <h2>📝 Логи операций</h2>
           </div>
@@ -206,7 +366,7 @@
         </div>
 
         <!-- SSH KEY MANAGEMENT CARD -->
-        <div class="card">
+        <div class="card" draggable="true">
           <div class="card-header">
             <h2>🔑 Управление SSH ключами</h2>
           </div>
@@ -233,7 +393,7 @@
         </div>
 
         <!-- FIREWALL CARD -->
-        <div class="card">
+        <div class="card" draggable="true">
           <div class="card-header">
             <h2>🔥 Firewall</h2>
           </div>
@@ -264,14 +424,195 @@
           </div>
         </div>
 
-        <!-- NOTIFICATIONS CARD -->
-        <div class="card">
+        <!-- TERMINAL CARD -->
+        <div class="card" draggable="true">
           <div class="card-header">
-            <h2>🔔 Уведомления</h2>
+            <h2>💻 Терминал</h2>
           </div>
           <div class="card-body">
-            <div id="notificationsList" class="notifications-list">
-              <p class="text-muted">Нет уведомлений</p>
+            <div
+              style="
+                display: flex;
+                flex-direction: column;
+                height: 100%;
+                gap: 10px;
+              "
+            >
+              <div
+                class="terminal-output"
+                id="terminalOutput"
+                style="
+                  flex: 1;
+                  background: #1e1e1e;
+                  color: #d4d4d4;
+                  padding: 10px;
+                  border-radius: 4px;
+                  overflow-y: auto;
+                  font-family: 'Courier New', monospace;
+                  font-size: 12px;
+                  border: 1px solid #333;
+                "
+              >
+                <p style="margin: 0; color: #888">
+                  $ Готово к выполнению команд
+                </p>
+              </div>
+              <div style="display: flex; gap: 8px">
+                <input
+                  type="text"
+                  id="terminalInput"
+                  placeholder="Введите команду (например: sudo systemctl status nginx)..."
+                  style="
+                    flex: 1;
+                    padding: 8px;
+                    border: 1px solid #ddd;
+                    border-radius: 4px;
+                    font-family: 'Courier New', monospace;
+                    font-size: 12px;
+                  "
+                />
+                <button
+                  id="terminalExecBtn"
+                  class="btn btn-primary"
+                  style="white-space: nowrap"
+                >
+                  Выполнить
+                </button>
+              </div>
+              <div
+                id="terminalError"
+                style="color: #d32f2f; font-size: 12px; display: none"
+              ></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- VPN CONFIGURATION CARD -->
+        <div class="card" draggable="true">
+          <div class="card-header">
+            <h2>🔐 VPN Конфигурация</h2>
+          </div>
+          <div class="card-body">
+            <div style="display: flex; flex-direction: column; gap: 15px">
+              <!-- VPN Type Selection -->
+              <div class="vpn-config-section">
+                <h3>📋 Тип VPN</h3>
+                <div class="vpn-config-form">
+                  <select id="vpnType" style="width: 100%">
+                    <option value="wireguard">WireGuard</option>
+                    <option value="openvpn">OpenVPN</option>
+                    <option value="xray">Xray</option>
+                  </select>
+                </div>
+              </div>
+
+              <!-- WireGuard Config -->
+              <div class="vpn-config-section" id="wireguardConfig">
+                <h3>🛡️ WireGuard</h3>
+                <div class="vpn-config-form">
+                  <label>Приватный ключ:</label>
+                  <textarea
+                    id="wgPrivateKey"
+                    placeholder="Скопируйте приватный ключ..."
+                    rows="3"
+                    style="
+                      font-family: 'Courier New', monospace;
+                      font-size: 0.85em;
+                    "
+                  ></textarea>
+                  <label>IP адрес:</label>
+                  <input type="text" id="wgAddress" placeholder="10.0.0.2/32" />
+                  <label>DNS серверы:</label>
+                  <input
+                    type="text"
+                    id="wgDNS"
+                    placeholder="8.8.8.8, 8.8.4.4"
+                  />
+                  <button class="btn btn-primary" id="wgConnectBtn">
+                    Подключиться
+                  </button>
+                </div>
+              </div>
+
+              <!-- OpenVPN Config -->
+              <div
+                class="vpn-config-section"
+                id="openvpnConfig"
+                style="display: none"
+              >
+                <h3>🔓 OpenVPN</h3>
+                <div class="vpn-config-form">
+                  <label>Конфиг файл (.ovpn):</label>
+                  <textarea
+                    id="ovpnConfig"
+                    placeholder="Скопируйте содержимое .ovpn файла..."
+                    rows="5"
+                    style="
+                      font-family: 'Courier New', monospace;
+                      font-size: 0.85em;
+                    "
+                  ></textarea>
+                  <button class="btn btn-primary" id="ovpnConnectBtn">
+                    Подключиться
+                  </button>
+                </div>
+              </div>
+
+              <!-- Xray Config -->
+              <div
+                class="vpn-config-section"
+                id="xrayConfig"
+                style="display: none"
+              >
+                <h3>⚡ Xray</h3>
+                <div class="vpn-config-form">
+                  <label>UUID:</label>
+                  <input
+                    type="text"
+                    id="xrayUUID"
+                    placeholder="00000000-0000-0000-0000-000000000000"
+                  />
+                  <label>Сервер адрес:</label>
+                  <input
+                    type="text"
+                    id="xrayServer"
+                    placeholder="example.com"
+                  />
+                  <label>Порт:</label>
+                  <input type="number" id="xrayPort" placeholder="443" />
+                  <label>Шифрование:</label>
+                  <select id="xrayEncryption">
+                    <option value="auto">auto</option>
+                    <option value="aes-128-gcm">aes-128-gcm</option>
+                    <option value="chacha20-poly1305">chacha20-poly1305</option>
+                  </select>
+                  <button class="btn btn-primary" id="xrayConnectBtn">
+                    Подключиться
+                  </button>
+                </div>
+              </div>
+
+              <!-- VPN Status -->
+              <div
+                style="
+                  padding: 12px;
+                  background: rgba(0, 0, 0, 0.2);
+                  border-radius: 6px;
+                "
+              >
+                <div
+                  style="
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                  "
+                >
+                  <span style="color: #b0b0b0">Статус подключения:</span>
+                  <span class="vpn-status inactive" id="vpnStatus"
+                    >❌ Отключено</span
+                  >
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -281,6 +622,7 @@
     <!-- TOAST NOTIFICATIONS -->
     <div id="toastContainer" class="toast-container"></div>
 
+    <script src="config.js"></script>
     <script src="adminui_client.js"></script>
   </body>
 </html>
