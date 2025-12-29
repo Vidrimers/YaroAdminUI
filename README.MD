@@ -1,5 +1,12 @@
 # 🚀 YaroAdminUI - Server Administration Panel
 
+> **⚠️ IMPORTANT**: This admin panel manages a **REMOTE SERVER** via SSH, not your local machine!
+>
+> - Server IP: `144.124.237.222`
+> - All commands execute on the remote server
+> - SSH key authentication required
+> - See [SSH_REMOTE_SERVER.md](./SSH_REMOTE_SERVER.md) for setup
+
 Полнофункциональная админ-панель для управления сервером через веб-интерфейс с поддержкой трёх методов аутентификации:
 
 - 🔐 SSH ключи (OpenSSH ≥8.2)
@@ -8,6 +15,7 @@
 
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 ![Node.js](https://img.shields.io/badge/Node.js-v18%2B-green)
+![SSH](https://img.shields.io/badge/SSH-Remote%20Management-red)
 
 ## ✨ Особенности
 
