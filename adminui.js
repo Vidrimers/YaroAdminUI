@@ -32,6 +32,15 @@ class DB {
       id INTEGER PRIMARY KEY, username TEXT, action TEXT, category TEXT,
       timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
     )`);
+    // Add category column if it doesn't exist (migration)
+    this.db.run(
+      `ALTER TABLE activity_logs ADD COLUMN category TEXT DEFAULT 'general'`,
+      (err) => {
+        if (err && !err.message.includes("duplicate column name")) {
+          console.warn("Migration warning:", err.message);
+        }
+      }
+    );
     this.db.run(`CREATE TABLE IF NOT EXISTS user_settings (
       id INTEGER PRIMARY KEY, 
       username TEXT UNIQUE,
@@ -185,6 +194,7 @@ class SSHHelper {
           });
         })
         .on("error", (err) => {
+          console.error("SSH Connection Error:", err.message);
           reject(err);
         })
         .connect({
@@ -193,9 +203,18 @@ class SSHHelper {
           username: this.username,
           privateKey: this.privateKey,
           password: process.env.SSH_PASSWORD,
-          readyTimeout: 10000,
+          readyTimeout: 30000, // Increased from 10 to 30 seconds
+          keepaliveInterval: 10000, // Send keepalive every 10 seconds
+          keepaliveCountMax: 3, // Maximum keepalive attempts
           algorithms: {
-            serverHostKey: ["ssh-rsa", "ssh-dss", "ecdsa-sha2-nistp256"],
+            serverHostKey: [
+              "ssh-rsa",
+              "ssh-dss",
+              "ecdsa-sha2-nistp256",
+              "ecdsa-sha2-nistp384",
+              "ecdsa-sha2-nistp521",
+              "ssh-ed25519",
+            ],
           },
         });
     });
@@ -801,12 +820,15 @@ app.post("/api/server/execute", verifyToken, async (req, res) => {
         case "firewall":
           const port = args[0];
           const action = args[1] || "allow";
+          console.log("FIREWALL REQUEST:", { port, action, args });
           if (action === "allow" || action === "open") {
             sshCommand = `sudo ufw allow ${port}`;
           } else if (action === "deny" || action === "close") {
             sshCommand = `sudo ufw deny ${port}`;
           }
+          console.log("EXECUTING:", sshCommand);
           output = await ssh.executeCommand(sshCommand);
+          console.log("OUTPUT:", output);
           break;
 
         case "restart-ssh":
@@ -836,6 +858,11 @@ app.post("/api/server/execute", verifyToken, async (req, res) => {
         success: true,
         output: output.trim() || "Command executed successfully",
         command: command,
+      });
+      console.log("RESPONSE SENT:", {
+        success: true,
+        output: output.trim(),
+        command,
       });
     } catch (error) {
       res.json({
