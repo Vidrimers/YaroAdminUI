@@ -1115,7 +1115,7 @@ class UIController {
           btn.textContent = "⏳ Завершение...";
 
           try {
-            const result = await this.api.killProcess(pid, 9);
+            const result = await this.api.killProcess(pid, "9");
             this.toast.success(`Процесс ${pid} завершён`);
             // Reload processes after killing
             setTimeout(() => this.loadProcesses(), 1000);
