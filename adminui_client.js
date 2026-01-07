@@ -925,33 +925,21 @@ class UIController {
           const statusText = isActive ? "✓ Online" : "✕ Offline";
 
           item.innerHTML = `
-            <div style="flex: 1;">
-              <div style="display: flex; justify-content: space-between; align-items: center;">
-                <span style="font-weight: 500;">${process.name}</span>
-                <span class="status-badge ${statusClass}">${statusText}</span>
-              </div>
-              <div class="pm2-info">
-                <div class="pm2-info-item"><span class="pm2-info-label">PID:</span> <span class="pm2-info-value">${
-                  process.pid || "N/A"
-                }</span></div>
-                <div class="pm2-info-item"><span class="pm2-info-label">Memory:</span> <span class="pm2-info-value">${
-                  process.memory
-                }</span></div>
-                <div class="pm2-info-item"><span class="pm2-info-label">CPU:</span> <span class="pm2-info-value">${
-                  process.cpu
-                }</span></div>
-              </div>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+              <span style="font-weight: 500; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${process.name}</span>
+              <span class="status-badge ${statusClass}">${statusText}</span>
             </div>
-            <div class="service-actions" style="margin-top: 10px;">
-              <button class="btn btn-sm btn-success" data-service-action="start" data-service-type="pm2" data-service-name="${
-                process.name
-              }">Запуск</button>
-              <button class="btn btn-sm btn-warning" data-service-action="restart" data-service-type="pm2" data-service-name="${
-                process.name
-              }">Перезагрузка</button>
-              <button class="btn btn-sm btn-danger" data-service-action="stop" data-service-type="pm2" data-service-name="${
-                process.name
-              }">Остановка</button>
+            ${process.pid && process.pid !== 'N/A' ? `
+            <div style="display: flex; gap: 10px; margin-bottom: 8px; font-size: 0.85em;">
+              <span style="color: #888;">PID: <span style="color: #667eea;">${process.pid}</span></span>
+              <span style="color: #888;">CPU: <span style="color: #ff9800;">${process.cpu || 'N/A'}</span></span>
+              <span style="color: #888;">RAM: <span style="color: #4caf50;">${process.memory || 'N/A'}</span></span>
+            </div>
+            ` : ''}
+            <div class="service-actions">
+              <button class="btn btn-sm btn-success" data-service-action="start" data-service-type="pm2" data-service-name="${process.name}">Запуск</button>
+              <button class="btn btn-sm btn-warning" data-service-action="restart" data-service-type="pm2" data-service-name="${process.name}">Перезагрузка</button>
+              <button class="btn btn-sm btn-danger" data-service-action="stop" data-service-type="pm2" data-service-name="${process.name}">Остановка</button>
             </div>
           `;
 
