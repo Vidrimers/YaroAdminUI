@@ -448,19 +448,96 @@ app.get("/api/server/services", verifyToken, async (req, res) => {
         "apache2",
         "httpd",
       ];
-      systemctlServices = allServices
+      
+      const filteredServices = allServices
         .filter(
           (s) =>
             importantServices.some((imp) => s.unit.includes(imp)) ||
             s.active === "active"
         )
-        .slice(0, 10)
-        .map((s) => ({
+        .slice(0, 10);
+
+      // Get resource usage for all services in ONE SSH call
+      const serviceNames = filteredServices.map(s => s.unit).join(' ');
+      let resourceData = {};
+      
+      try {
+        // Get all PIDs in one command
+        const pidsOutput = await ssh.executeCommand(
+          `for svc in ${serviceNames}; do echo "$svc:$(systemctl show $svc --property=MainPID 2>/dev/null | cut -d= -f2)"; done`
+        );
+        
+        // Parse PIDs
+        const pidLines = pidsOutput.split('\n').filter(l => l.trim());
+        const pids = [];
+        const pidMap = {};
+        
+        pidLines.forEach(line => {
+          const [svc, pid] = line.split(':');
+          if (pid && pid !== '0') {
+            pids.push(pid);
+            pidMap[pid] = svc;
+          }
+        });
+        
+        // Get CPU and memory for all PIDs in ONE ps command
+        if (pids.length > 0) {
+          const psOutput = await ssh.executeCommand(
+            `ps -p ${pids.join(',')} -o pid=,%cpu=,%mem= --no-headers 2>/dev/null || echo ""`
+          );
+          
+          const psLines = psOutput.split('\n').filter(l => l.trim());
+          psLines.forEach(line => {
+            const parts = line.trim().split(/\s+/);
+            if (parts.length >= 3) {
+              const [pid, cpuVal, memVal] = parts;
+              const svc = pidMap[pid];
+              if (svc) {
+                resourceData[svc] = {
+                  pid: pid,
+                  cpu: `${parseFloat(cpuVal).toFixed(1)}%`,
+                  memory: `${parseFloat(memVal).toFixed(1)}%`,
+                  cpuNum: parseFloat(cpuVal),
+                  memoryNum: parseFloat(memVal)
+                };
+              }
+            }
+          });
+        }
+      } catch (e) {
+        console.log('Error getting resource data:', e.message);
+      }
+      
+      // Build services array with resource data
+      systemctlServices = filteredServices.map(s => {
+        const serviceName = s.unit.replace(".service", "");
+        const resources = resourceData[s.unit] || {
+          pid: 'N/A',
+          cpu: 'N/A',
+          memory: 'N/A',
+          cpuNum: 0,
+          memoryNum: 0
+        };
+        
+        return {
           type: "systemctl",
-          name: s.unit.replace(".service", ""),
+          name: serviceName,
           status: s.active,
           description: s.description || s.unit,
-        }));
+          pid: resources.pid,
+          cpu: resources.cpu,
+          memory: resources.memory,
+          cpuNum: resources.cpuNum,
+          memoryNum: resources.memoryNum
+        };
+      });
+      
+      // Sort by CPU + Memory usage (highest first)
+      systemctlServices.sort((a, b) => {
+        const aTotal = a.cpuNum + a.memoryNum;
+        const bTotal = b.cpuNum + b.memoryNum;
+        return bTotal - aTotal;
+      });
     } catch (e) {
       console.log("Systemctl not available:", e.message);
     }
@@ -592,48 +669,96 @@ app.get("/api/server/ports", verifyToken, async (req, res) => {
     let openPorts = [];
 
     try {
-      // Try netstat first
-      const netstatOutput = await ssh.executeCommand(
-        "netstat -tuln 2>/dev/null | grep LISTEN || ss -tuln 2>/dev/null | grep LISTEN || echo ''"
-      );
-
-      if (netstatOutput) {
-        const lines = netstatOutput.split("\n").filter((line) => line.trim());
-        openPorts = lines
-          .map((line) => {
-            // Parse netstat/ss output
-            const parts = line.split(/\s+/);
-            let port = null;
-            let protocol = null;
-
-            // Try to find port in address:port format
-            for (let part of parts) {
-              if (part.includes(":")) {
-                const portMatch = part.match(/:(\d+)$/);
-                if (portMatch) {
-                  port = portMatch[1];
-                  protocol = parts[0] && parts[0].toLowerCase();
-                  break;
+      // Use multiple methods to detect open ports
+      const portsMap = new Map();
+      
+      // Method 1: ss command (modern, fast)
+      try {
+        const ssOutput = await ssh.executeCommand(
+          "ss -tuln 2>/dev/null | awk 'NR>1 {print $1, $5}'"
+        );
+        
+        if (ssOutput) {
+          const lines = ssOutput.split("\n").filter((line) => line.trim());
+          lines.forEach((line) => {
+            const parts = line.trim().split(/\s+/);
+            if (parts.length >= 2) {
+              const protocol = parts[0].toLowerCase().replace(/6$/, ''); // remove 6 from tcp6/udp6
+              const address = parts[1];
+              const portMatch = address.match(/:(\d+)$/);
+              if (portMatch) {
+                const port = parseInt(portMatch[1]);
+                const key = `${port}-${protocol}`;
+                if (!portsMap.has(key)) {
+                  portsMap.set(key, { port, protocol, service: getServiceName(port) });
                 }
               }
             }
-
-            if (port) {
-              return {
-                port: parseInt(port),
-                protocol: protocol || "tcp",
-                service: getServiceName(parseInt(port)),
-              };
-            }
-            return null;
-          })
-          .filter((p) => p !== null);
-
-        // Remove duplicates
-        openPorts = Array.from(
-          new Map(openPorts.map((p) => [`${p.port}-${p.protocol}`, p])).values()
-        );
+          });
+        }
+      } catch (e) {
+        console.log("ss command failed:", e.message);
       }
+      
+      // Method 2: netstat (fallback, older systems)
+      try {
+        const netstatOutput = await ssh.executeCommand(
+          "netstat -tuln 2>/dev/null | awk '/LISTEN|^udp/ {print $1, $4}'"
+        );
+        
+        if (netstatOutput) {
+          const lines = netstatOutput.split("\n").filter((line) => line.trim());
+          lines.forEach((line) => {
+            const parts = line.trim().split(/\s+/);
+            if (parts.length >= 2) {
+              const protocol = parts[0].toLowerCase().replace(/6$/, '');
+              const address = parts[1];
+              const portMatch = address.match(/:(\d+)$/);
+              if (portMatch) {
+                const port = parseInt(portMatch[1]);
+                const key = `${port}-${protocol}`;
+                if (!portsMap.has(key)) {
+                  portsMap.set(key, { port, protocol, service: getServiceName(port) });
+                }
+              }
+            }
+          });
+        }
+      } catch (e) {
+        console.log("netstat command failed:", e.message);
+      }
+      
+      // Method 3: lsof (most comprehensive)
+      try {
+        const lsofOutput = await ssh.executeCommand(
+          "lsof -i -P -n 2>/dev/null | awk '/LISTEN|UDP/ {print $8, $9}' | grep -E ':[0-9]+' | sort -u"
+        );
+        
+        if (lsofOutput) {
+          const lines = lsofOutput.split("\n").filter((line) => line.trim());
+          lines.forEach((line) => {
+            const parts = line.trim().split(/\s+/);
+            if (parts.length >= 1) {
+              const info = parts[0];
+              const protocolMatch = info.match(/^(TCP|UDP)/i);
+              const portMatch = info.match(/:(\d+)$/);
+              
+              if (protocolMatch && portMatch) {
+                const protocol = protocolMatch[1].toLowerCase();
+                const port = parseInt(portMatch[1]);
+                const key = `${port}-${protocol}`;
+                if (!portsMap.has(key)) {
+                  portsMap.set(key, { port, protocol, service: getServiceName(port) });
+                }
+              }
+            }
+          });
+        }
+      } catch (e) {
+        console.log("lsof command failed:", e.message);
+      }
+
+      openPorts = Array.from(portsMap.values());
     } catch (e) {
       console.log("Port check error:", e.message);
     }
@@ -1159,9 +1284,7 @@ app.get("/api/server/processes", verifyToken, async (req, res) => {
       // Use ps command to get process information
       // Format: PID, %CPU, %MEM, VSZ (virtual memory), RSS (physical memory), COMMAND
       const output = await ssh.executeCommand(
-        `ps aux --sort=-%cpu | head -n ${
-          parseInt(limit) + 1
-        } | tail -n ${parseInt(limit)}`
+        `ps aux | tail -n +2`
       );
 
       const processes = [];
@@ -1187,9 +1310,19 @@ app.get("/api/server/processes", verifyToken, async (req, res) => {
         }
       });
 
+      // Sort by CPU + Memory usage (highest first)
+      processes.sort((a, b) => {
+        const aTotal = a.cpu + a.memory;
+        const bTotal = b.cpu + b.memory;
+        return bTotal - aTotal;
+      });
+
+      // Take top N processes
+      const topProcesses = processes.slice(0, parseInt(limit));
+
       res.json({
-        processes: processes,
-        total: processes.length,
+        processes: topProcesses,
+        total: topProcesses.length,
         timestamp: new Date().toISOString(),
       });
     } catch (e) {
@@ -1510,4 +1643,12 @@ process.on("SIGTERM", async () => {
     await db.close();
     process.exit(0);
   });
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+});
+
+process.on('uncaughtException', (error) => {
+  console.error('Uncaught Exception:', error);
 });

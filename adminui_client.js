@@ -882,6 +882,13 @@ class UIController {
               <span style="font-weight: 500; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${service.name}</span>
               <span class="status-badge ${statusClass}">${statusText}</span>
             </div>
+            ${service.pid && service.pid !== 'N/A' ? `
+            <div style="display: flex; gap: 10px; margin-bottom: 8px; font-size: 0.85em;">
+              <span style="color: #888;">PID: <span style="color: #667eea;">${service.pid}</span></span>
+              <span style="color: #888;">CPU: <span style="color: #ff9800;">${service.cpu || 'N/A'}</span></span>
+              <span style="color: #888;">RAM: <span style="color: #4caf50;">${service.memory || 'N/A'}</span></span>
+            </div>
+            ` : ''}
             <div class="service-actions">
               <button class="btn btn-sm btn-success" data-service-action="start" data-service-type="systemctl" data-service-name="${service.name}">Запуск</button>
               <button class="btn btn-sm btn-warning" data-service-action="restart" data-service-type="systemctl" data-service-name="${service.name}">Перезагрузка</button>
@@ -1257,9 +1264,15 @@ class UIController {
     try {
       const response = await this.api.getNotifications();
       const notificationsList = document.getElementById("notificationsList");
+      const notificationsCount = document.getElementById("notificationsCount");
+      
       notificationsList.innerHTML = "";
 
       if (response.notifications && response.notifications.length > 0) {
+        // Show badge with count
+        notificationsCount.textContent = response.notifications.length;
+        notificationsCount.style.display = "inline-block";
+        
         response.notifications.forEach((notification) => {
           const item = document.createElement("div");
           item.className = "notification-item";
@@ -1267,21 +1280,51 @@ class UIController {
           notificationsList.appendChild(item);
         });
       } else {
+        // Hide badge when no notifications
+        notificationsCount.style.display = "none";
         notificationsList.innerHTML =
           '<p class="text-muted">Нет уведомлений</p>';
       }
     } catch (error) {
       console.error("Error loading notifications:", error);
+      // Hide badge on error
+      const notificationsCount = document.getElementById("notificationsCount");
+      if (notificationsCount) {
+        notificationsCount.style.display = "none";
+      }
     }
   }
 
   async executeAction(action) {
+    // Map action names to readable commands
+    const actionNames = {
+      'restart-ssh': 'Перезагрузка SSH',
+      'check-disk': 'Проверка диска',
+      'restart-service': 'Перезагрузка сервиса'
+    };
+    
+    const actionName = actionNames[action] || action;
+    
+    // Add to terminal
+    this.addToTerminal(`$ ${actionName}`, 'command');
+    
     try {
       const result = await this.api.executeCommand(action);
-      this.toast.success(`Действие выполнено: ${action}`);
+      this.toast.success(`Действие выполнено: ${actionName}`);
+      
+      // Show output in terminal
+      if (result.output) {
+        this.addToTerminal(result.output, 'output');
+      } else if (result.message) {
+        this.addToTerminal(result.message, 'success');
+      } else {
+        this.addToTerminal('Выполнено успешно', 'success');
+      }
+      
       this.loadDashboardData();
     } catch (error) {
       this.toast.error("Ошибка: " + error.message);
+      this.addToTerminal(`Ошибка: ${error.message}`, 'error');
     }
   }
 
