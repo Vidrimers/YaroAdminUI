@@ -14,5 +14,9 @@ replacements.txt
 * copy*.db
 *.db
 reset-db.js
+adminui.sh
+botadminui.sh
+stopadminui.sh
+stopadminuibot.sh
 
 DISCORD_OAUTH_SETUP.md
