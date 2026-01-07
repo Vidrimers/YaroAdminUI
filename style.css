@@ -479,7 +479,7 @@ textarea.form-control {
   margin: 0 auto;
   display: grid;
   grid-template-columns: repeat(auto-fill, 350px);
-  grid-auto-rows: 20px;
+  grid-auto-rows: 10px;
   grid-auto-flow: dense;
   gap: 15px;
   padding: 0 20px;
@@ -501,7 +501,7 @@ textarea.form-control {
   max-height: 700px;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
   position: relative;
-  grid-row: span 16;
+  grid-row: span 31;
 }
 
 .card:hover {

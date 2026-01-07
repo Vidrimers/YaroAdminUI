@@ -566,6 +566,25 @@ class UIController {
       });
     }
 
+    // Check PM2 button
+    const checkPm2Btn = document.getElementById("checkPm2Btn");
+    if (checkPm2Btn) {
+      checkPm2Btn.addEventListener("click", async () => {
+        checkPm2Btn.disabled = true;
+        checkPm2Btn.textContent = "🔍 Проверяю...";
+        try {
+          const result = await this.api.executeCommand("check-pm2");
+          this.toast.info("PM2 вывод:\n" + result.output, 10000);
+          console.log("PM2 check output:", result.output);
+        } catch (error) {
+          this.toast.error("Ошибка проверки PM2: " + error.message);
+        } finally {
+          checkPm2Btn.disabled = false;
+          checkPm2Btn.textContent = "🔍 Проверить PM2";
+        }
+      });
+    }
+
     // Refresh ports button
     const refreshPortsBtn = document.getElementById("refreshPorts");
     if (refreshPortsBtn) {
@@ -693,7 +712,10 @@ class UIController {
       const pm2List = document.getElementById("pm2List");
       pm2List.innerHTML = "";
 
+      console.log("Full services response:", response);
       console.log("PM2 Response:", response.pm2);
+      console.log("PM2 available:", response.pm2Available);
+      console.log("PM2 length:", response.pm2 ? response.pm2.length : 0);
 
       if (response.pm2 && response.pm2.length > 0) {
         response.pm2.forEach((process) => {
@@ -737,8 +759,14 @@ class UIController {
           pm2List.appendChild(item);
         });
       } else {
-        pm2List.innerHTML =
-          '<p class="text-muted">Нет PM2 процессов или PM2 не установлен</p>';
+        console.warn("No PM2 processes found in response");
+        if (response.pm2Available === false) {
+          pm2List.innerHTML =
+            '<p class="text-muted">PM2 не установлен на сервере или нет запущенных процессов</p>';
+        } else {
+          pm2List.innerHTML =
+            '<p class="text-muted">Нет запущенных PM2 процессов</p>';
+        }
       }
 
       // Setup service action listeners
@@ -1268,9 +1296,19 @@ class UIController {
 
     // Helper function to calculate grid row span based on height
     const calculateGridSpan = (height) => {
-      // Each grid row is 20px, so we calculate how many rows the card needs
-      // Add 1 extra row for padding/margin
-      return Math.ceil(height / 20) + 1;
+      // Each grid row is 10px, so we calculate how many rows the card needs
+      // Add 2 extra rows for gap/padding
+      return Math.ceil(height / 10) + 2;
+    };
+
+    // Helper function to recalculate all card spans
+    const recalculateAllSpans = () => {
+      const allCards = container.querySelectorAll(".card");
+      allCards.forEach((card) => {
+        const height = card.offsetHeight;
+        const span = calculateGridSpan(height);
+        card.style.gridRow = `span ${span}`;
+      });
     };
 
     cards.forEach((card) => {
@@ -1297,6 +1335,9 @@ class UIController {
             // Auto-adjust grid span based on height
             const span = calculateGridSpan(newHeight);
             card.style.gridRow = `span ${span}`;
+            
+            // Recalculate all other cards to fill gaps
+            recalculateAllSpans();
           }
         };
 
@@ -1305,6 +1346,9 @@ class UIController {
           document.body.style.userSelect = "auto";
           document.removeEventListener("mousemove", onMouseMove);
           document.removeEventListener("mouseup", onMouseUp);
+
+          // Final recalculation
+          recalculateAllSpans();
 
           // Save card heights to localStorage
           this.saveCardHeights();
@@ -1321,6 +1365,9 @@ class UIController {
 
     // Restore saved heights
     this.restoreCardHeights();
+    
+    // Initial calculation
+    setTimeout(() => recalculateAllSpans(), 100);
   }
 
   saveCardHeights() {
@@ -1350,7 +1397,7 @@ class UIController {
 
       // Helper function to calculate grid row span based on height
       const calculateGridSpan = (height) => {
-        return Math.ceil(height / 20) + 1;
+        return Math.ceil(height / 10) + 2;
       };
 
       cards.forEach((card) => {

@@ -496,23 +496,44 @@ app.get("/api/server/services", verifyToken, async (req, res) => {
     }
 
     // Get PM2 processes
+    let pm2Available = false;
     try {
-      // Try with full path first (for non-interactive shells)
+      // Try multiple methods to get PM2 processes
       let pm2Output = "";
+      
       try {
+        // Method 1: Try standard pm2 command with full path
         pm2Output = await ssh.executeCommand(
-          "pm2 list --json 2>/dev/null || /usr/local/bin/pm2 list --json 2>/dev/null || echo '[]'"
+          "export PATH=$PATH:/usr/local/bin:/usr/bin:~/.npm-global/bin && pm2 jlist 2>/dev/null || pm2 list --json 2>/dev/null || echo '[]'"
         );
       } catch (e) {
-        // If PM2 list fails, try another method
-        pm2Output = await ssh.executeCommand(
-          "which pm2 && pm2 list --json || echo '[]'"
-        );
+        console.log("PM2 method 1 failed:", e.message);
+        
+        try {
+          // Method 2: Try to find pm2 executable
+          const pm2Path = await ssh.executeCommand(
+            "which pm2 || find /usr -name pm2 2>/dev/null | head -1 || echo ''"
+          );
+          
+          if (pm2Path && pm2Path.trim()) {
+            pm2Output = await ssh.executeCommand(
+              `${pm2Path.trim()} jlist 2>/dev/null || ${pm2Path.trim()} list --json 2>/dev/null || echo '[]'`
+            );
+          } else {
+            pm2Output = "[]";
+          }
+        } catch (e2) {
+          console.log("PM2 method 2 failed:", e2.message);
+          pm2Output = "[]";
+        }
       }
 
+      console.log("PM2 raw output:", pm2Output);
+      
       const pm2Data = JSON.parse(pm2Output || "[]");
 
       if (Array.isArray(pm2Data) && pm2Data.length > 0) {
+        pm2Available = true;
         pm2Processes = pm2Data
           .filter((p) => p && p.name && p.name !== "empty")
           .map((p) => ({
@@ -529,23 +550,16 @@ app.get("/api/server/services", verifyToken, async (req, res) => {
       }
     } catch (e) {
       console.log("PM2 not available:", e.message);
-      // Fallback mock PM2 processes
-      pm2Processes = [
-        {
-          type: "pm2",
-          name: "adminui-server",
-          status: "online",
-          pid: 1234,
-          memory: "125MB",
-          cpu: "2%",
-          uptime: "3d",
-        },
-      ];
     }
+
+    // If no PM2 processes found, return empty array (not mock data)
+    // This way the client knows there are no real processes
+    console.log(`PM2 processes found: ${pm2Processes.length}, PM2 available: ${pm2Available}`);
 
     res.json({
       systemctl: systemctlServices,
       pm2: pm2Processes,
+      pm2Available: pm2Available,
     });
   } catch (err) {
     console.error("Error in /api/server/services:", err);
@@ -558,8 +572,15 @@ app.get("/api/server/services", verifyToken, async (req, res) => {
           status: "active",
           description: "Web Server",
         },
+        {
+          type: "systemctl",
+          name: "ssh",
+          status: "active",
+          description: "SSH Server",
+        },
       ],
       pm2: [],
+      pm2Available: false,
     });
   }
 });
@@ -805,6 +826,7 @@ app.post("/api/server/execute", verifyToken, async (req, res) => {
       "enable-firewall": "sudo ufw enable",
       "disable-firewall": "sudo ufw disable",
       "restart-app": "sudo systemctl restart adminui",
+      "check-pm2": "export PATH=$PATH:/usr/local/bin:/usr/bin:~/.npm-global/bin && pm2 jlist 2>&1 || pm2 list 2>&1 || which pm2 2>&1 || echo 'PM2 not found'",
       reboot: "sudo reboot",
     };
 
@@ -818,6 +840,10 @@ app.post("/api/server/execute", verifyToken, async (req, res) => {
 
       switch (command) {
         case "check-disk":
+          output = await ssh.executeCommand(sshCommand);
+          break;
+
+        case "check-pm2":
           output = await ssh.executeCommand(sshCommand);
           break;
 
