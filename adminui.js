@@ -789,6 +789,80 @@ app.get("/api/server/ports", verifyToken, async (req, res) => {
   }
 });
 
+// Get UFW firewall rules
+app.get("/api/server/firewall", verifyToken, async (req, res) => {
+  try {
+    const ssh = new SSHHelper(SERVER_IP);
+    let firewallData = {
+      enabled: false,
+      rules: [],
+      status: "unknown"
+    };
+
+    try {
+      // Check if UFW is installed and get status
+      const statusOutput = await ssh.executeCommand(
+        "sudo ufw status verbose 2>/dev/null || echo 'UFW_NOT_INSTALLED'"
+      );
+
+      if (statusOutput.includes("UFW_NOT_INSTALLED")) {
+        firewallData.status = "not_installed";
+      } else if (statusOutput.includes("Status: active")) {
+        firewallData.enabled = true;
+        firewallData.status = "active";
+        
+        // Parse rules
+        const lines = statusOutput.split('\n');
+        const rules = [];
+        
+        lines.forEach(line => {
+          // Match lines like: "22/tcp                     ALLOW IN    Anywhere"
+          // or: "666                        DENY IN     Anywhere"
+          const matchWithProtocol = line.match(/^(\d+)\/(tcp|udp)\s+(\w+)\s+(IN|OUT)\s+(.+)$/i);
+          const matchWithoutProtocol = line.match(/^(\d+)\s+(\w+)\s+(IN|OUT)\s+(.+)$/i);
+          
+          if (matchWithProtocol) {
+            rules.push({
+              port: parseInt(matchWithProtocol[1]),
+              protocol: matchWithProtocol[2].toLowerCase(),
+              action: matchWithProtocol[3].toUpperCase(),
+              direction: matchWithProtocol[4].toUpperCase(),
+              from: matchWithProtocol[5].trim()
+            });
+          } else if (matchWithoutProtocol) {
+            rules.push({
+              port: parseInt(matchWithoutProtocol[1]),
+              protocol: 'tcp/udp', // No specific protocol means both
+              action: matchWithoutProtocol[2].toUpperCase(),
+              direction: matchWithoutProtocol[3].toUpperCase(),
+              from: matchWithoutProtocol[4].trim()
+            });
+          }
+        });
+        
+        firewallData.rules = rules;
+      } else if (statusOutput.includes("Status: inactive")) {
+        firewallData.enabled = false;
+        firewallData.status = "inactive";
+      }
+    } catch (e) {
+      console.log("UFW check error:", e.message);
+      firewallData.status = "error";
+      firewallData.error = e.message;
+    }
+
+    res.json(firewallData);
+  } catch (err) {
+    console.error("Error in /api/server/firewall:", err);
+    res.status(500).json({
+      message: err.message,
+      enabled: false,
+      rules: [],
+      status: "error"
+    });
+  }
+});
+
 // Helper function to identify service by port
 function getServiceName(port) {
   const services = {
@@ -1070,29 +1144,55 @@ app.post("/api/server/execute", verifyToken, async (req, res) => {
           console.log("FIREWALL REQUEST:", { port, action, args });
 
           if (action === "allow" || action === "open") {
-            // First delete any existing deny rules, then allow
-            sshCommand = `sudo ufw delete deny ${port} 2>/dev/null; sudo ufw allow ${port}`;
+            // Delete ALL existing rules for this port (tcp, udp, plain number)
+            sshCommand = `
+              sudo ufw delete deny ${port} 2>/dev/null || true;
+              sudo ufw delete deny ${port}/tcp 2>/dev/null || true;
+              sudo ufw delete deny ${port}/udp 2>/dev/null || true;
+              sudo ufw allow ${port} 2>&1
+            `.replace(/\n/g, ' ');
           } else if (action === "deny" || action === "close") {
-            // First delete any existing allow rules, then deny
-            sshCommand = `sudo ufw delete allow ${port} 2>/dev/null; sudo ufw deny ${port}`;
+            // Delete ALL existing rules for this port (tcp, udp, plain number)
+            sshCommand = `
+              sudo ufw delete allow ${port} 2>/dev/null || true;
+              sudo ufw delete allow ${port}/tcp 2>/dev/null || true;
+              sudo ufw delete allow ${port}/udp 2>/dev/null || true;
+              sudo ufw deny ${port} 2>&1
+            `.replace(/\n/g, ' ');
           } else if (action === "delete" || action === "remove") {
-            sshCommand = `sudo ufw delete allow ${port} 2>/dev/null; sudo ufw delete deny ${port} 2>/dev/null`;
+            // Delete ALL rules for this port
+            sshCommand = `
+              sudo ufw delete allow ${port} 2>/dev/null || true;
+              sudo ufw delete allow ${port}/tcp 2>/dev/null || true;
+              sudo ufw delete allow ${port}/udp 2>/dev/null || true;
+              sudo ufw delete deny ${port} 2>/dev/null || true;
+              sudo ufw delete deny ${port}/tcp 2>/dev/null || true;
+              sudo ufw delete deny ${port}/udp 2>/dev/null || true
+            `.replace(/\n/g, ' ');
           }
           console.log("EXECUTING:", sshCommand);
           output = await ssh.executeCommand(sshCommand);
           console.log("OUTPUT:", output);
+          
+          // Clean up output - remove "non-existent rule" messages
+          output = output.split('\n')
+            .filter(line => !line.includes('Could not delete non-existent rule'))
+            .filter(line => line.trim())
+            .join('\n');
 
           // Check firewall status after command
           try {
             const statusOutput = await ssh.executeCommand(
-              "sudo ufw status | grep " + port
+              `sudo ufw status | grep -E "^${port}/" || echo "Порт ${port} не найден в правилах firewall"`
             );
-            output +=
-              "\n\nСтатус firewall для порта " + port + ":\n" + statusOutput;
+            
+            if (statusOutput.includes('не найден')) {
+              output += `\n\n✅ Порт ${port} успешно удален из firewall`;
+            } else {
+              output += "\n\n📋 Текущий статус порта " + port + ":\n" + statusOutput;
+            }
           } catch (statusError) {
-            output +=
-              "\n\nНе удалось проверить статус firewall: " +
-              statusError.message;
+            output += "\n\n⚠️ Не удалось проверить статус firewall";
           }
           break;
 
