@@ -415,11 +415,37 @@
                 <select id="fwAction" class="form-control">
                   <option value="allow">Разрешить</option>
                   <option value="deny">Запретить</option>
+                  <option value="delete">Удалить правило</option>
                 </select>
               </div>
               <button type="submit" class="btn btn-warning">
                 Применить правило
               </button>
+              <button
+                type="button"
+                id="checkFirewallBtn"
+                class="btn btn-info"
+                style="margin-left: 10px"
+              >
+                Проверить статус
+              </button>
+              <div style="margin-top: 10px">
+                <button
+                  type="button"
+                  id="enableFirewallBtn"
+                  class="btn btn-success"
+                  style="margin-right: 5px"
+                >
+                  Включить UFW
+                </button>
+                <button
+                  type="button"
+                  id="disableFirewallBtn"
+                  class="btn btn-danger"
+                >
+                  Выключить UFW
+                </button>
+              </div>
             </form>
           </div>
         </div>
