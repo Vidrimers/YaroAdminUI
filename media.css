@@ -1,0 +1,433 @@
+/* ==================== MEDIA QUERIES ==================== */
+
+/* Tablets and small desktops (max-width: 1024px) */
+@media (max-width: 1024px) {
+  .cards-container {
+    column-width: 300px !important;
+  }
+
+  .header-controls {
+    gap: 8px;
+  }
+
+  .header-controls button {
+    font-size: 0.9em;
+    padding: 8px 12px;
+  }
+
+  .card {
+    max-height: 500px;
+  }
+
+  .firewall-ports-card {
+    max-height: 800px !important;
+  }
+}
+
+/* Tablets portrait (max-width: 768px) */
+@media (max-width: 768px) {
+  body {
+    padding: 10px;
+  }
+
+  .header {
+    padding: 12px 15px;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .header h1 {
+    font-size: 1.3em;
+  }
+
+  .header-controls {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .cards-container {
+    column-count: 1 !important;
+    column-width: auto !important;
+  }
+
+  .card {
+    max-height: 450px;
+    margin-bottom: 15px;
+    width: 100%;
+  }
+
+  .firewall-ports-card {
+    max-height: 700px !important;
+  }
+
+  /* Auth container */
+  .auth-container {
+    padding: 30px 20px;
+    max-width: 90%;
+  }
+
+  .auth-header h1 {
+    font-size: 2em;
+  }
+
+  /* Toast notifications */
+  .toast {
+    min-width: 90%;
+    max-width: 100%;
+  }
+
+  .toast-container {
+    bottom: 10px;
+    right: 10px;
+    left: 10px;
+  }
+
+  /* Firewall form adjustments */
+  #firewallForm .form-group {
+    margin-bottom: 10px;
+  }
+
+  #firewallForm button {
+    font-size: 0.85em;
+    padding: 8px 12px;
+    margin: 5px 5px 5px 0;
+  }
+
+  /* Process and service items */
+  .process-item,
+  .service-item {
+    padding: 8px;
+    font-size: 0.9em;
+  }
+
+  .process-grid,
+  .service-grid {
+    grid-template-columns: 1fr;
+    gap: 5px;
+  }
+
+  /* Port items */
+  .port-item,
+  .firewall-item {
+    grid-template-columns: 60px 70px 1fr;
+    padding: 8px;
+    font-size: 0.9em;
+  }
+
+  /* Terminal */
+  .terminal {
+    max-height: 300px;
+    font-size: 0.85em;
+  }
+
+  /* Modals */
+  .modal-content {
+    width: 95%;
+    max-height: 90vh;
+    padding: 15px;
+  }
+
+  .modal-header h2 {
+    font-size: 1.2em;
+  }
+}
+
+/* Mobile devices (max-width: 480px) */
+@media (max-width: 480px) {
+  body {
+    padding: 5px;
+  }
+
+  .header {
+    padding: 10px;
+  }
+
+  .header h1 {
+    font-size: 1.5em;
+  }
+
+  .header-controls {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .header-controls button {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .dropdown-menu {
+    left: 0 !important;
+    right: 0 !important;
+    width: calc(100vw - 20px) !important;
+    max-width: none !important;
+  }
+
+  .card {
+    max-height: 400px;
+  }
+
+  .firewall-ports-card {
+    max-height: 600px !important;
+  }
+
+  .card-header {
+    padding: 10px;
+  }
+
+  .card-header h2 {
+    font-size: 1.1em;
+  }
+
+  .card-body {
+    padding: 10px;
+    font-size: 0.9em;
+  }
+
+  /* Auth container */
+  .auth-container {
+    padding: 20px;
+  }
+
+  /* Buttons */
+  .btn {
+    padding: 10px 15px;
+    font-size: 0.85em;
+  }
+
+  /* Firewall section height adjustment */
+  .firewall-ports-card > .card-body > div:first-child {
+    height: 350px !important;
+  }
+
+  /* Form elements */
+  .form-control {
+    font-size: 0.9em;
+    padding: 8px;
+  }
+
+  #firewallForm button {
+    width: 100%;
+    margin: 5px 0;
+  }
+
+  /* Process items - single column */
+  .process-item,
+  .service-item {
+    padding: 6px;
+    font-size: 0.85em;
+  }
+
+  .process-info,
+  .service-info {
+    font-size: 0.8em;
+  }
+
+  /* Port items - stack vertically */
+  .port-item {
+    grid-template-columns: 1fr;
+    gap: 5px;
+    text-align: left;
+  }
+
+  .port-number,
+  .port-protocol,
+  .port-service {
+    text-align: left;
+  }
+
+  .firewall-item {
+    grid-template-columns: 1fr;
+    gap: 5px;
+  }
+
+  /* Terminal */
+  .terminal {
+    max-height: 250px;
+    font-size: 0.8em;
+    padding: 8px;
+  }
+
+  /* Script list */
+  .script-item {
+    padding: 8px;
+    font-size: 0.85em;
+  }
+
+  /* SSH keys */
+  .ssh-key-item {
+    padding: 8px;
+    font-size: 0.85em;
+  }
+
+  /* Buttons */
+  .btn-sm {
+    font-size: 0.75em;
+    padding: 4px 8px;
+  }
+
+  /* Service actions */
+  .service-actions {
+    flex-wrap: wrap;
+    gap: 3px;
+  }
+
+  .service-actions .btn {
+    font-size: 0.6em !important;
+    padding: 2px 4px !important;
+  }
+
+  /* Modals */
+  .modal-content {
+    width: 98%;
+    padding: 10px;
+  }
+
+  .modal-header {
+    padding: 10px;
+  }
+
+  .modal-body {
+    padding: 10px;
+  }
+
+  .modal-footer {
+    padding: 10px;
+    flex-direction: column;
+  }
+
+  .modal-footer button {
+    width: 100%;
+    margin: 5px 0;
+  }
+}
+
+/* Extra small devices (max-width: 400px) */
+@media (max-width: 400px) {
+  body {
+    padding: 3px;
+  }
+
+  .header {
+    padding: 8px;
+  }
+
+  .header h1 {
+    font-size: 1em;
+  }
+
+  .header-controls{
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+  }
+
+  .card {
+    max-height: 350px;
+  }
+
+  .firewall-ports-card {
+    max-height: 610px !important;
+  }
+
+  .card-header h2 {
+    font-size: 0.9em;
+  }
+
+  .card-body {
+    padding: 8px;
+    font-size: 0.85em;
+  }
+
+  /* Firewall section even smaller */
+  .firewall-ports-card > .card-body > div:first-child {
+    height: 300px !important;
+  }
+
+  #firewallForm .form-group label {
+    font-size: 0.85em;
+  }
+
+  #firewallForm button {
+    font-size: 0.8em;
+    padding: 6px;
+  }
+
+  /* Very compact process items */
+  .process-item,
+  .service-item {
+    padding: 5px;
+    font-size: 0.8em;
+  }
+
+  .process-info,
+  .service-info {
+    font-size: 0.75em;
+  }
+
+  /* Port items very compact */
+  .port-item,
+  .firewall-item {
+    padding: 6px;
+    font-size: 0.8em;
+  }
+
+  /* Terminal very compact */
+  .terminal {
+    max-height: 200px;
+    font-size: 0.75em;
+    padding: 6px;
+  }
+
+  /* Buttons very small */
+  .btn {
+    font-size: 0.8em;
+    padding: 6px;
+  }
+
+  .btn-sm {
+    font-size: 0.7em;
+    padding: 3px 6px;
+  }
+
+  /* Service actions very compact */
+  .service-actions .btn {
+    font-size: 0.55em !important;
+    padding: 1px 3px !important;
+  }
+
+  /* Dropdown menus */
+  .dropdown-menu {
+    font-size: 0.85em;
+    padding: 5px;
+  }
+
+  /* Modals */
+  .modal-content {
+    width: 100%;
+    max-height: 95vh;
+    padding: 8px;
+  }
+
+  .modal-header h2 {
+    font-size: 1em;
+  }
+}
+
+/* Landscape orientation adjustments */
+@media (max-height: 600px) and (orientation: landscape) {
+  .card {
+    max-height: 300px;
+  }
+
+  .firewall-ports-card {
+    max-height: 400px !important;
+  }
+
+  .firewall-ports-card > .card-body > div:first-child {
+    height: 200px !important;
+  }
+
+  .modal-content {
+    max-height: 95vh;
+  }
+}

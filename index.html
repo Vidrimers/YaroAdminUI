@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Yaro adminUI - Управление сервером</title>
     <link rel="stylesheet" href="style.css" />
+    <link rel="stylesheet" href="media.css" />
   </head>
   <body>
     <!-- AUTH SCREEN -->
@@ -199,7 +200,28 @@
               </button>
             </div>
           </div>
-          <div class="notifications-dropdown">
+          
+          <div class="system-dropdown">
+            <button
+              id="systemToggle"
+              class="btn btn-warning"
+              title="Управление системой"
+            >
+              ⚙️
+            </button>
+            <div id="systemMenu" class="system-menu" style="display: none">
+              <button class="system-option" data-action="restart-ssh">
+                🔄 Перезагрузить SSH
+              </button>
+              <button class="system-option" data-action="check-disk">
+                💾 Проверить диск
+              </button>
+              <button class="system-option" data-action="restart-service">
+                🔄 Рестарт сервиса
+              </button>
+            </div>
+          </div>
+<div class="notifications-dropdown">
             <button
               id="notificationsToggle"
               class="btn btn-info"
@@ -221,26 +243,6 @@
               <div id="notificationsList" class="notifications-list-header">
                 <p class="text-muted">Нет уведомлений</p>
               </div>
-            </div>
-          </div>
-          <div class="system-dropdown">
-            <button
-              id="systemToggle"
-              class="btn btn-warning"
-              title="Управление системой"
-            >
-              ⚙️
-            </button>
-            <div id="systemMenu" class="system-menu" style="display: none">
-              <button class="system-option" data-action="restart-ssh">
-                🔄 Перезагрузить SSH
-              </button>
-              <button class="system-option" data-action="check-disk">
-                💾 Проверить диск
-              </button>
-              <button class="system-option" data-action="restart-service">
-                🔄 Рестарт сервиса
-              </button>
             </div>
           </div>
           <button id="logoutBtn" class="btn btn-danger">Выход</button>
