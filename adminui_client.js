@@ -878,12 +878,14 @@ class UIController {
           const statusText = isActive ? "✓ Запущен" : "✕ Остановлен";
 
           item.innerHTML = `
-            <span>${service.name}</span>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+              <span style="font-weight: 500; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${service.name}</span>
+              <span class="status-badge ${statusClass}">${statusText}</span>
+            </div>
             <div class="service-actions">
               <button class="btn btn-sm btn-success" data-service-action="start" data-service-type="systemctl" data-service-name="${service.name}">Запуск</button>
               <button class="btn btn-sm btn-warning" data-service-action="restart" data-service-type="systemctl" data-service-name="${service.name}">Перезагрузка</button>
               <button class="btn btn-sm btn-danger" data-service-action="stop" data-service-type="systemctl" data-service-name="${service.name}">Остановка</button>
-              <span class="status-badge ${statusClass}">${statusText}</span>
             </div>
           `;
 
@@ -1025,15 +1027,19 @@ class UIController {
           const cpu = process.cpu ? process.cpu.toFixed(1) : "0.0";
           const memory = process.memory ? process.memory.toFixed(1) : "0.0";
           const command = process.command || "N/A";
-          const truncatedCmd =
-            command.length > 40 ? command.substring(0, 40) + "..." : command;
 
           item.innerHTML = `
-            <div class="process-pid">${process.pid}</div>
-            <div class="process-command" title="${command}">${truncatedCmd}</div>
-            <div class="process-user">${process.user}</div>
-            <div class="process-cpu">${cpu}%</div>
-            <div class="process-memory">${memory}%</div>
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <div style="display: flex; gap: 10px; align-items: center; flex: 1; min-width: 0;">
+                <span class="process-pid">PID: ${process.pid}</span>
+                <span class="process-user">👤 ${process.user}</span>
+              </div>
+              <div style="display: flex; gap: 10px;">
+                <span class="process-cpu">CPU: ${cpu}%</span>
+                <span class="process-memory">RAM: ${memory}%</span>
+              </div>
+            </div>
+            <div class="process-command" title="${command}">${command}</div>
             <div class="process-actions">
               <button class="btn btn-danger btn-sm" data-process-action="kill" data-process-pid="${process.pid}">
                 ⚔️ Kill
@@ -1126,13 +1132,20 @@ class UIController {
         btn.disabled = true;
         btn.textContent = "⏳ Выполняется...";
 
+        // Add to terminal
+        const actionText = action === "start" ? "запуск" : action === "restart" ? "перезагрузка" : "остановка";
+        this.addToTerminal(`$ ${type} ${name} - ${actionText}`, 'command');
+
         try {
           const result = await this.api.manageService(type, name, action);
           this.toast.success(`${name} - ${action} выполнен`);
+          this.addToTerminal(`✓ ${name} - ${actionText} выполнен успешно`, 'success');
+          
           // Reload services
           setTimeout(() => this.loadServices(), 1000);
         } catch (error) {
           this.toast.error(`Ошибка: ${error.message}`);
+          this.addToTerminal(`✗ Ошибка: ${error.message}`, 'error');
         } finally {
           btn.disabled = false;
           btn.textContent =
@@ -1158,15 +1171,24 @@ class UIController {
           const originalText = btn.textContent;
           btn.textContent = "⏳ Выполняется...";
 
+          // Add to terminal
+          const command = useSudo ? `sudo ${scriptPath}` : scriptPath;
+          this.addToTerminal(`$ ${command}`, 'command');
+
           try {
             const result = await this.api.executeScript(scriptPath, useSudo);
             this.toast.success(`Скрипт выполнен успешно`);
-            // Could show output in modal or alert
+            
+            // Show output in terminal
             if (result.output) {
+              this.addToTerminal(result.output, 'output');
               console.log("Script output:", result.output);
+            } else {
+              this.addToTerminal('Выполнено успешно', 'success');
             }
           } catch (error) {
             this.toast.error(`Ошибка: ${error.message}`);
+            this.addToTerminal(`Ошибка: ${error.message}`, 'error');
           } finally {
             btn.disabled = false;
             btn.textContent = originalText;
@@ -1174,6 +1196,34 @@ class UIController {
         }
       });
     });
+  }
+
+  addToTerminal(text, type = 'output') {
+    const terminalOutput = document.getElementById('terminalOutput');
+    if (!terminalOutput) return;
+
+    const line = document.createElement('div');
+    line.style.margin = '2px 0';
+    line.style.whiteSpace = 'pre-wrap';
+    line.style.wordBreak = 'break-word';
+
+    // Color based on type
+    if (type === 'command') {
+      line.style.color = '#4ec9b0'; // cyan for commands
+      line.style.fontWeight = 'bold';
+    } else if (type === 'error') {
+      line.style.color = '#f48771'; // red for errors
+    } else if (type === 'success') {
+      line.style.color = '#89d185'; // green for success
+    } else {
+      line.style.color = '#d4d4d4'; // default gray
+    }
+
+    line.textContent = text;
+    terminalOutput.appendChild(line);
+
+    // Auto scroll to bottom
+    terminalOutput.scrollTop = terminalOutput.scrollHeight;
   }
 
   async loadLogs() {
@@ -1264,6 +1314,7 @@ class UIController {
       this.setupTerminal();
       this.setupScreenProcesses();
       this.setupVPNConfiguration();
+      this.setupServerStatusUI();
       this.setupThemes();
       this.setupNotificationsUI();
       this.setupSystemUI();
@@ -1273,35 +1324,12 @@ class UIController {
     });
   }
 
-  setupAutoGridLayout() {
-    const resizeAllCards = () => {
-      const cards = document.querySelectorAll('.card');
-      cards.forEach(card => {
-        const height = card.offsetHeight;
-        const rowSpan = Math.ceil(height + 15); // +15 for gap
-        card.style.gridRowEnd = `span ${rowSpan}`;
-      });
-    };
+  recalculateGridLayout() {
+    // Disabled - using flexbox layout now
+  }
 
-    // Initial resize
-    setTimeout(resizeAllCards, 100);
-    
-    // Resize on window resize
-    window.addEventListener('resize', resizeAllCards);
-    
-    // Resize when content changes (using MutationObserver)
-    const container = document.getElementById('cardsContainer');
-    if (container) {
-      const observer = new MutationObserver(() => {
-        setTimeout(resizeAllCards, 50);
-      });
-      
-      observer.observe(container, {
-        childList: true,
-        subtree: true,
-        characterData: true
-      });
-    }
+  setupAutoGridLayout() {
+    // Disabled - using flexbox layout now
   }
 
   setupLogout() {
@@ -1873,6 +1901,8 @@ class UIController {
         this.syncCardCollapseState();
       });
     });
+    
+    // No need to recalculate layout with flexbox
   }
 
   syncCardCollapseState() {
@@ -2065,6 +2095,50 @@ class UIController {
     localStorage.setItem("vpnConfigs", JSON.stringify(vpnConfigs));
   }
 
+  setupServerStatusUI() {
+    const statusToggle = document.getElementById("serverStatusToggle");
+    const statusMenu = document.getElementById("serverStatusMenu");
+
+    if (statusToggle && statusMenu) {
+      // Toggle status menu
+      statusToggle.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const isVisible = statusMenu.style.display === "block";
+        
+        // Close all other menus
+        this.closeAllHeaderMenus();
+        
+        // Toggle this menu
+        statusMenu.style.display = isVisible ? "none" : "block";
+      });
+
+      // Close menu when clicking outside (but not on other dropdowns)
+      document.addEventListener("click", (e) => {
+        if (statusMenu.style.display === "block" && 
+            !e.target.closest("#serverStatusToggle") && 
+            !e.target.closest("#serverStatusMenu")) {
+          statusMenu.style.display = "none";
+        }
+      });
+    }
+  }
+
+  closeAllHeaderMenus() {
+    // Close all dropdown menus in header
+    const menus = [
+      document.getElementById("serverStatusMenu"),
+      document.getElementById("themeMenu"),
+      document.getElementById("notificationsMenu"),
+      document.getElementById("systemMenu")
+    ];
+    
+    menus.forEach(menu => {
+      if (menu) {
+        menu.style.display = "none";
+      }
+    });
+  }
+
   setupThemes() {
     const themes = [
       "default",
@@ -2084,8 +2158,13 @@ class UIController {
     if (themeToggle) {
       themeToggle.addEventListener("click", (e) => {
         e.stopPropagation();
-        themeMenu.style.display =
-          themeMenu.style.display === "none" ? "block" : "none";
+        const isVisible = themeMenu.style.display === "block";
+        
+        // Close all other menus
+        this.closeAllHeaderMenus();
+        
+        // Toggle this menu
+        themeMenu.style.display = isVisible ? "none" : "block";
       });
     }
 
@@ -2163,8 +2242,13 @@ class UIController {
     if (notificationsToggle) {
       notificationsToggle.addEventListener("click", (e) => {
         e.stopPropagation();
-        notificationsMenu.style.display =
-          notificationsMenu.style.display === "none" ? "block" : "none";
+        const isVisible = notificationsMenu.style.display === "block";
+        
+        // Close all other menus
+        this.closeAllHeaderMenus();
+        
+        // Toggle this menu
+        notificationsMenu.style.display = isVisible ? "none" : "block";
       });
     }
 
@@ -2246,8 +2330,13 @@ class UIController {
     if (systemToggle) {
       systemToggle.addEventListener("click", (e) => {
         e.stopPropagation();
-        systemMenu.style.display =
-          systemMenu.style.display === "none" ? "block" : "none";
+        const isVisible = systemMenu.style.display === "block";
+        
+        // Close all other menus
+        this.closeAllHeaderMenus();
+        
+        // Toggle this menu
+        systemMenu.style.display = isVisible ? "none" : "block";
       });
     }
 
