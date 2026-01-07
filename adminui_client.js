@@ -217,6 +217,7 @@ class UIController {
     this.auth = authManager;
     this.api = apiService;
     this.toast = toastManager;
+    this.notifications = []; // Initialize notifications array
 
     this.authScreen = document.getElementById("authScreen");
     this.dashboard = document.getElementById("dashboard");
@@ -484,6 +485,66 @@ class UIController {
           this.toast.error("Ошибка: " + error.message);
         }
       });
+
+    // Firewall status check button
+    const checkFirewallBtn = document.getElementById("checkFirewallBtn");
+    if (checkFirewallBtn) {
+      checkFirewallBtn.addEventListener("click", async () => {
+        try {
+          checkFirewallBtn.disabled = true;
+          checkFirewallBtn.textContent = "Проверяю...";
+          const result = await this.api.executeCommand("check-firewall-status");
+          this.toast.info("Статус firewall:\n" + result.output);
+        } catch (error) {
+          this.toast.error("Ошибка проверки статуса: " + error.message);
+        } finally {
+          checkFirewallBtn.disabled = false;
+          checkFirewallBtn.textContent = "Проверить статус";
+        }
+      });
+    }
+
+    // Enable firewall button
+    const enableFirewallBtn = document.getElementById("enableFirewallBtn");
+    if (enableFirewallBtn) {
+      enableFirewallBtn.addEventListener("click", async () => {
+        try {
+          enableFirewallBtn.disabled = true;
+          enableFirewallBtn.textContent = "Включаю...";
+          const result = await this.api.executeCommand("enable-firewall");
+          this.toast.success("UFW включен");
+          if (result && result.output) {
+            this.toast.info("Результат: " + result.output);
+          }
+        } catch (error) {
+          this.toast.error("Ошибка включения UFW: " + error.message);
+        } finally {
+          enableFirewallBtn.disabled = false;
+          enableFirewallBtn.textContent = "Включить UFW";
+        }
+      });
+    }
+
+    // Disable firewall button
+    const disableFirewallBtn = document.getElementById("disableFirewallBtn");
+    if (disableFirewallBtn) {
+      disableFirewallBtn.addEventListener("click", async () => {
+        try {
+          disableFirewallBtn.disabled = true;
+          disableFirewallBtn.textContent = "Выключаю...";
+          const result = await this.api.executeCommand("disable-firewall");
+          this.toast.warning("UFW выключен");
+          if (result && result.output) {
+            this.toast.info("Результат: " + result.output);
+          }
+        } catch (error) {
+          this.toast.error("Ошибка выключения UFW: " + error.message);
+        } finally {
+          disableFirewallBtn.disabled = false;
+          disableFirewallBtn.textContent = "Выключить UFW";
+        }
+      });
+    }
   }
 
   setupForms() {

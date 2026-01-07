@@ -800,6 +800,10 @@ app.post("/api/server/execute", verifyToken, async (req, res) => {
       "check-disk": "df -h",
       "restart-service": "sudo systemctl restart nginx",
       firewall: "firewall", // Special case - needs args
+      "check-firewall-status":
+        "echo 'Testing output...' && date && echo 'UFW check:' && which ufw 2>/dev/null && echo 'UFW found' || echo 'UFW not found' && echo 'Done'",
+      "enable-firewall": "sudo ufw enable",
+      "disable-firewall": "sudo ufw disable",
       "restart-app": "sudo systemctl restart adminui",
       reboot: "sudo reboot",
     };
@@ -821,14 +825,41 @@ app.post("/api/server/execute", verifyToken, async (req, res) => {
           const port = args[0];
           const action = args[1] || "allow";
           console.log("FIREWALL REQUEST:", { port, action, args });
+
           if (action === "allow" || action === "open") {
-            sshCommand = `sudo ufw allow ${port}`;
+            // First delete any existing deny rules, then allow
+            sshCommand = `sudo ufw delete deny ${port} 2>/dev/null; sudo ufw allow ${port}`;
           } else if (action === "deny" || action === "close") {
-            sshCommand = `sudo ufw deny ${port}`;
+            // First delete any existing allow rules, then deny
+            sshCommand = `sudo ufw delete allow ${port} 2>/dev/null; sudo ufw deny ${port}`;
+          } else if (action === "delete" || action === "remove") {
+            sshCommand = `sudo ufw delete allow ${port} 2>/dev/null; sudo ufw delete deny ${port} 2>/dev/null`;
           }
           console.log("EXECUTING:", sshCommand);
           output = await ssh.executeCommand(sshCommand);
           console.log("OUTPUT:", output);
+
+          // Check firewall status after command
+          try {
+            const statusOutput = await ssh.executeCommand(
+              "sudo ufw status | grep " + port
+            );
+            output +=
+              "\n\nСтатус firewall для порта " + port + ":\n" + statusOutput;
+          } catch (statusError) {
+            output +=
+              "\n\nНе удалось проверить статус firewall: " +
+              statusError.message;
+          }
+          break;
+
+        case "check-firewall-status":
+          output = await ssh.executeCommand(sshCommand);
+          break;
+
+        case "enable-firewall":
+        case "disable-firewall":
+          output = await ssh.executeCommand(sshCommand);
           break;
 
         case "restart-ssh":
