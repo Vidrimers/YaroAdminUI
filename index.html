@@ -339,10 +339,10 @@
           </div>
         </div>
 
-        <!-- PORTS CARD -->
-        <div class="card">
+        <!-- FIREWALL & PORTS CARD -->
+        <div class="card firewall-ports-card">
           <div class="card-header">
-            <h2>🔌 Открытые порты</h2>
+            <h2>🔥 Firewall & Порты</h2>
             <button
               id="refreshPorts"
               class="btn btn-sm btn-info"
@@ -352,8 +352,65 @@
               🔄
             </button>
           </div>
-          <div class="card-body">
-            <div style="max-height: 100%; overflow-y: auto">
+          <div class="card-body" style="padding: 0; display: flex; flex-direction: column; height: 100%;">
+            <!-- Firewall Management Section (Fixed 400px) -->
+            <div style="height: 270px; padding: 15px; border-bottom: 2px solid rgba(255, 255, 255, 0.1); flex-shrink: 0;">
+              <form id="firewallForm" class="form">
+                <div class="form-group">
+                  <label for="fwPort">Порт:</label>
+                  <input
+                    type="number"
+                    id="fwPort"
+                    class="form-control"
+                    placeholder="22"
+                    min="1"
+                    max="65535"
+                  />
+                </div>
+                <div class="form-group">
+                  <label for="fwAction">Действие:</label>
+                  <select id="fwAction" class="form-control">
+                    <option value="allow">Разрешить</option>
+                    <option value="deny">Запретить</option>
+                    <option value="delete">Удалить правило</option>
+                  </select>
+                </div>
+                <div class="button-rules-group" style="display: flex; gap: 5px; justify-content: center;">
+                  <button type="submit" class="btn btn-warning" >
+                  Применить правило
+                </button>
+                <button
+                  type="button"
+                  id="checkFirewallBtn"
+                  class="btn btn-info"
+                  style="margin-left: 10px"
+                >
+                  Проверить статус
+                </button>
+                </div>
+                
+                <div class="button-ufw-group" style="display: flex; gap: 5px; justify-content: center;">
+                  <button
+                    type="button"
+                    id="enableFirewallBtn"
+                    class="btn btn-success"
+                    style="margin-right: 5px"
+                  >
+                    Включить UFW
+                  </button>
+                  <button
+                    type="button"
+                    id="disableFirewallBtn"
+                    class="btn btn-danger"
+                  >
+                    Выключить UFW
+                  </button>
+                </div>
+              </form>
+            </div>
+            
+            <!-- Ports Section (Scrollable) -->
+            <div style="flex: 1; overflow-y: auto; padding: 15px;">
               <!-- Listening Ports Section -->
               <div style="margin-bottom: 20px;">
                 <h3 style="font-size: 14px; font-weight: 600; margin-bottom: 10px; color: var(--text-color);">
@@ -447,64 +504,6 @@
             <p class="text-muted" style="margin-top: 15px; font-size: 0.9em;">
               💡 Нажмите 👁️ чтобы просмотреть ключи на сервере
             </p>
-          </div>
-        </div>
-
-        <!-- FIREWALL CARD -->
-        <div class="card">
-          <div class="card-header">
-            <h2>🔥 Firewall</h2>
-          </div>
-          <div class="card-body">
-            <form id="firewallForm" class="form">
-              <div class="form-group">
-                <label for="fwPort">Порт:</label>
-                <input
-                  type="number"
-                  id="fwPort"
-                  class="form-control"
-                  placeholder="22"
-                  min="1"
-                  max="65535"
-                />
-              </div>
-              <div class="form-group">
-                <label for="fwAction">Действие:</label>
-                <select id="fwAction" class="form-control">
-                  <option value="allow">Разрешить</option>
-                  <option value="deny">Запретить</option>
-                  <option value="delete">Удалить правило</option>
-                </select>
-              </div>
-              <button type="submit" class="btn btn-warning">
-                Применить правило
-              </button>
-              <button
-                type="button"
-                id="checkFirewallBtn"
-                class="btn btn-info"
-                style="margin-left: 10px"
-              >
-                Проверить статус
-              </button>
-              <div style="margin-top: 10px">
-                <button
-                  type="button"
-                  id="enableFirewallBtn"
-                  class="btn btn-success"
-                  style="margin-right: 5px"
-                >
-                  Включить UFW
-                </button>
-                <button
-                  type="button"
-                  id="disableFirewallBtn"
-                  class="btn btn-danger"
-                >
-                  Выключить UFW
-                </button>
-              </div>
-            </form>
           </div>
         </div>
 
