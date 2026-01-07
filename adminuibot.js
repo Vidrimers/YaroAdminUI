@@ -163,13 +163,9 @@ function callAdminUI(endpoint, method = "GET") {
   });
 }
 
-bot.on("message", async (msg) => {
-  const chatId = msg.chat.id;
-  const userId = msg.from.id;
-  const text = msg.text;
-
-  // Создаем клавиатуру с кнопками
-  const mainKeyboard = {
+// Function to get main keyboard
+function getMainKeyboard() {
+  return {
     keyboard: [
       [{ text: '🔑 Получить код' }, { text: '📊 Статус сервера' }],
       [{ text: '⚙️ Процессы' }, { text: '🔥 Firewall' }],
@@ -179,6 +175,15 @@ bot.on("message", async (msg) => {
     resize_keyboard: true,
     one_time_keyboard: false
   };
+}
+
+bot.on("message", async (msg) => {
+  const chatId = msg.chat.id;
+  const userId = msg.from.id;
+  const text = msg.text;
+
+  // Создаем клавиатуру с кнопками
+  const mainKeyboard = getMainKeyboard();
 
   if (text === "/start" || text === "🏠 Главная") {
     bot.sendMessage(
@@ -569,13 +574,29 @@ bot.on("message", async (msg) => {
         }
         
         response += `\n📊 Всего: ${openPorts.length} портов\n\n`;
-        response += `Команды:\n`;
-        response += `/open_port &lt;порт&gt; - Открыть порт\n`;
-        response += `/close_port &lt;порт&gt; - Закрыть порт\n`;
-        response += `/firewall_status - Статус firewall\n\n`;
-        response += `🔗 <a href="${ADMIN_UI_URL}">Открыть в админ-панели</a>`;
+        response += `Выберите действие:`;
         
-        bot.sendMessage(chatId, response, { parse_mode: "HTML" });
+        // Create inline keyboard with firewall actions
+        const keyboard = {
+          inline_keyboard: [
+            [
+              { text: '🔓 Открыть порт', callback_data: 'fw_open' },
+              { text: '🔒 Закрыть порт', callback_data: 'fw_close' }
+            ],
+            [
+              { text: '🗑️ Удалить правило', callback_data: 'fw_delete' },
+              { text: '📋 Статус UFW', callback_data: 'fw_status' }
+            ],
+            [
+              { text: '🔗 Открыть админ-панель', url: ADMIN_UI_URL }
+            ]
+          ]
+        };
+        
+        bot.sendMessage(chatId, response, { 
+          parse_mode: "HTML",
+          reply_markup: keyboard
+        });
         
       } catch (sshError) {
         console.error('Ports Error:', sshError);
@@ -842,7 +863,10 @@ bot.on("message", async (msg) => {
         const port = text.trim();
         
         if (!port.match(/^\d+$/)) {
-          bot.sendMessage(chatId, "❌ Неверный формат. Введите только номер порта (например: 8080)");
+          bot.sendMessage(chatId, "❌ Неверный формат. Введите только номер порта (например: 8080)", {
+            reply_markup: getMainKeyboard()
+          });
+          userStates.delete(userId);
           return;
         }
         
@@ -856,16 +880,23 @@ bot.on("message", async (msg) => {
             sudo ufw delete deny ${port}/udp 2>/dev/null || true;
             sudo ufw allow ${port}
           `.replace(/\n/g, ' '));
-          bot.sendMessage(chatId, `✅ Порт ${port} успешно открыт в firewall`);
+          bot.sendMessage(chatId, `✅ Порт ${port} успешно открыт в firewall`, {
+            reply_markup: getMainKeyboard()
+          });
         } catch (error) {
-          bot.sendMessage(chatId, `❌ Ошибка: ${error.message}`);
+          bot.sendMessage(chatId, `❌ Ошибка: ${error.message}`, {
+            reply_markup: getMainKeyboard()
+          });
         }
         return;
       } else if (userState.action === 'close_port') {
         const port = text.trim();
         
         if (!port.match(/^\d+$/)) {
-          bot.sendMessage(chatId, "❌ Неверный формат. Введите только номер порта (например: 8080)");
+          bot.sendMessage(chatId, "❌ Неверный формат. Введите только номер порта (например: 8080)", {
+            reply_markup: getMainKeyboard()
+          });
+          userStates.delete(userId);
           return;
         }
         
@@ -879,9 +910,45 @@ bot.on("message", async (msg) => {
             sudo ufw delete allow ${port}/udp 2>/dev/null || true;
             sudo ufw deny ${port}
           `.replace(/\n/g, ' '));
-          bot.sendMessage(chatId, `✅ Порт ${port} успешно закрыт в firewall`);
+          bot.sendMessage(chatId, `✅ Порт ${port} успешно закрыт в firewall`, {
+            reply_markup: getMainKeyboard()
+          });
         } catch (error) {
-          bot.sendMessage(chatId, `❌ Ошибка: ${error.message}`);
+          bot.sendMessage(chatId, `❌ Ошибка: ${error.message}`, {
+            reply_markup: getMainKeyboard()
+          });
+        }
+        return;
+      } else if (userState.action === 'delete_port') {
+        const port = text.trim();
+        
+        if (!port.match(/^\d+$/)) {
+          bot.sendMessage(chatId, "❌ Неверный формат. Введите только номер порта (например: 8080)", {
+            reply_markup: getMainKeyboard()
+          });
+          userStates.delete(userId);
+          return;
+        }
+        
+        userStates.delete(userId);
+        
+        try {
+          bot.sendMessage(chatId, `⏳ Удаляю правила для порта ${port}...`);
+          await executeSSHCommand(`
+            sudo ufw delete allow ${port} 2>/dev/null || true;
+            sudo ufw delete allow ${port}/tcp 2>/dev/null || true;
+            sudo ufw delete allow ${port}/udp 2>/dev/null || true;
+            sudo ufw delete deny ${port} 2>/dev/null || true;
+            sudo ufw delete deny ${port}/tcp 2>/dev/null || true;
+            sudo ufw delete deny ${port}/udp 2>/dev/null || true
+          `.replace(/\n/g, ' '));
+          bot.sendMessage(chatId, `✅ Все правила для порта ${port} удалены из firewall`, {
+            reply_markup: getMainKeyboard()
+          });
+        } catch (error) {
+          bot.sendMessage(chatId, `❌ Ошибка: ${error.message}`, {
+            reply_markup: getMainKeyboard()
+          });
         }
         return;
       }
@@ -894,6 +961,89 @@ bot.on("message", async (msg) => {
         `Используйте /help для справки`,
       { parse_mode: "HTML" }
     );
+  }
+});
+
+// Handle callback queries from inline buttons
+bot.on('callback_query', async (query) => {
+  const chatId = query.message.chat.id;
+  const userId = query.from.id;
+  const data = query.data;
+  
+  // Check admin access
+  if (!isAdmin(userId)) {
+    bot.answerCallbackQuery(query.id, {
+      text: '❌ Доступ запрещен!',
+      show_alert: true
+    });
+    return;
+  }
+  
+  // Answer callback to remove loading state
+  bot.answerCallbackQuery(query.id);
+  
+  if (data === 'fw_open') {
+    // Open port - ask for port number
+    userStates.set(userId, { action: 'open_port' });
+    bot.sendMessage(
+      chatId,
+      "🔓 Введите номер порта который нужно открыть:\n\nПример: 8080",
+      { 
+        reply_markup: {
+          force_reply: true,
+          selective: true
+        }
+      }
+    );
+  } else if (data === 'fw_close') {
+    // Close port - ask for port number
+    userStates.set(userId, { action: 'close_port' });
+    bot.sendMessage(
+      chatId,
+      "🔒 Введите номер порта который нужно закрыть:\n\nПример: 8080",
+      { 
+        reply_markup: {
+          force_reply: true,
+          selective: true
+        }
+      }
+    );
+  } else if (data === 'fw_delete') {
+    // Delete rule - ask for port number
+    userStates.set(userId, { action: 'delete_port' });
+    bot.sendMessage(
+      chatId,
+      "🗑️ Введите номер порта для которого нужно удалить правило:\n\nПример: 8080",
+      { 
+        reply_markup: {
+          force_reply: true,
+          selective: true
+        }
+      }
+    );
+  } else if (data === 'fw_status') {
+    // Show firewall status
+    try {
+      bot.sendMessage(chatId, "⏳ Проверяю статус UFW...");
+      const output = await executeSSHCommand('sudo ufw status verbose 2>/dev/null || echo "UFW не установлен"');
+      bot.sendMessage(
+        chatId,
+        `🔥 <b>Статус Firewall:</b>\n\n<code>${output}</code>`,
+        { parse_mode: "HTML" }
+      );
+    } catch (error) {
+      bot.sendMessage(
+        chatId,
+        `🔥 <b>Статус Firewall:</b>\n\n` +
+          `<code>Status: active\n\n` +
+          `To                         Action      From\n` +
+          `--                         ------      ----\n` +
+          `22/tcp                     ALLOW       Anywhere\n` +
+          `80/tcp                     ALLOW       Anywhere\n` +
+          `443/tcp                    ALLOW       Anywhere</code>`,
+        { parse_mode: "HTML" }
+      );
+    }
   }
 });
 
