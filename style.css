@@ -559,6 +559,15 @@ textarea.form-control {
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.2);
 }
 
+/* Special card for Firewall & Ports with larger height */
+.firewall-ports-card {
+  max-height: 800px !important;
+}
+
+.firewall-ports-card .card-body {
+  max-height: none !important;
+}
+
 .card-header {
   background: rgba(102, 126, 234, 0.1);
   padding: 15px 20px;
