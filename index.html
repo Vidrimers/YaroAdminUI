@@ -312,6 +312,14 @@
         <div class="card">
           <div class="card-header">
             <h2>📜 Скрипты</h2>
+            <button
+              id="refreshScriptsBtn"
+              class="btn btn-sm btn-info"
+              style="margin-left: auto"
+              title="Обновить список скриптов"
+            >
+              🔄
+            </button>
           </div>
           <div class="card-body">
             <div id="scriptsList" class="scripts-list">
@@ -395,6 +403,14 @@
         <div class="card">
           <div class="card-header">
             <h2>🔑 Управление SSH ключами</h2>
+            <button
+              id="viewServerKeysBtn"
+              class="btn btn-sm btn-info"
+              style="margin-left: auto"
+              title="Просмотр ключей на сервере"
+            >
+              👁️
+            </button>
           </div>
           <div class="card-body">
             <form id="sshKeyForm" class="form">
@@ -410,11 +426,9 @@
                 Добавить ключ
               </button>
             </form>
-            <hr />
-            <h4>Текущие ключи:</h4>
-            <div id="keysList" class="keys-list">
-              <p class="text-muted">Загружаем ключи...</p>
-            </div>
+            <p class="text-muted" style="margin-top: 15px; font-size: 0.9em;">
+              💡 Нажмите 👁️ чтобы просмотреть ключи на сервере
+            </p>
           </div>
         </div>
 
@@ -692,6 +706,27 @@
         <div class="modal-footer">
           <button id="cancelSort" class="btn btn-secondary">Отмена</button>
           <button id="saveSort" class="btn btn-success">Сохранить</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- SSH KEYS MODAL -->
+    <div id="sshKeysModal" class="modal" style="display: none">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2>🔑 SSH ключи на сервере</h2>
+          <button id="closeSshKeysModal" class="modal-close">&times;</button>
+        </div>
+        <div class="modal-body">
+          <p class="text-muted" style="margin-bottom: 15px">
+            Список SSH ключей из ~/.ssh/authorized_keys
+          </p>
+          <div id="serverKeysList" style="max-height: 400px; overflow-y: auto;">
+            <p class="text-muted">Загрузка...</p>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button id="closeSshKeysModalBtn" class="btn btn-secondary">Закрыть</button>
         </div>
       </div>
     </div>

@@ -703,9 +703,44 @@ app.get("/api/server/logs", verifyToken, (req, res) => {
 // SSH Keys endpoints
 app.get("/api/server/ssh-keys", verifyToken, async (req, res) => {
   try {
-    res.json({ keys: [] });
+    const ssh = new SSHHelper(SERVER_IP);
+    let keys = [];
+
+    try {
+      // Read authorized_keys file
+      const output = await ssh.executeCommand(
+        "cat ~/.ssh/authorized_keys 2>/dev/null || echo ''"
+      );
+
+      if (output && output.trim()) {
+        const lines = output.trim().split("\n");
+        keys = lines
+          .filter((line) => line.trim() && !line.startsWith("#"))
+          .map((line, index) => {
+            // Parse SSH key format: type key comment
+            const parts = line.trim().split(/\s+/);
+            const type = parts[0] || "unknown";
+            const key = parts[1] || "";
+            const comment = parts.slice(2).join(" ") || `Key ${index + 1}`;
+
+            return {
+              id: index + 1,
+              type: type,
+              key: key.substring(0, 20) + "..." + key.substring(key.length - 20),
+              fullKey: line,
+              comment: comment,
+            };
+          });
+      }
+
+      console.log(`Found ${keys.length} SSH keys on server`);
+    } catch (e) {
+      console.log("Error reading SSH keys:", e.message);
+    }
+
+    res.json({ keys: keys });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    res.status(500).json({ message: err.message, keys: [] });
   }
 });
 
@@ -724,9 +759,66 @@ app.post("/api/server/ssh-keys", verifyToken, async (req, res) => {
 app.delete("/api/server/ssh-keys/:keyId", verifyToken, async (req, res) => {
   try {
     const { keyId } = req.params;
-    res.json({ message: "Key deleted" });
+    const ssh = new SSHHelper(SERVER_IP);
+
+    try {
+      // Read current authorized_keys
+      const output = await ssh.executeCommand(
+        "cat ~/.ssh/authorized_keys 2>/dev/null || echo ''"
+      );
+
+      if (output && output.trim()) {
+        const lines = output.trim().split("\n");
+        const validLines = lines.filter((line) => line.trim() && !line.startsWith("#"));
+
+        // Remove the key at the specified index (keyId - 1)
+        const keyIndex = parseInt(keyId) - 1;
+        if (keyIndex >= 0 && keyIndex < validLines.length) {
+          validLines.splice(keyIndex, 1);
+
+          // Write back to authorized_keys
+          const newContent = validLines.join("\n") + "\n";
+          const escapedContent = newContent.replace(/'/g, "'\\''");
+          
+          await ssh.executeCommand(
+            `echo '${escapedContent}' > ~/.ssh/authorized_keys`
+          );
+
+          // Log the action
+          await db.addActivityLog(
+            req.user.username,
+            `Deleted SSH key #${keyId}`,
+            "ssh-key"
+          );
+
+          res.json({ 
+            success: true,
+            message: "SSH ключ удален" 
+          });
+        } else {
+          res.status(404).json({ 
+            success: false,
+            message: "Ключ не найден" 
+          });
+        }
+      } else {
+        res.status(404).json({ 
+          success: false,
+          message: "Файл authorized_keys пуст" 
+        });
+      }
+    } catch (error) {
+      console.log("Error deleting SSH key:", error.message);
+      res.status(500).json({ 
+        success: false,
+        message: error.message 
+      });
+    }
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    res.status(500).json({ 
+      success: false,
+      message: err.message 
+    });
   }
 });
 
@@ -943,23 +1035,29 @@ app.get("/api/server/scripts", verifyToken, async (req, res) => {
       // Look for scripts in common directories
       const directories = [
         "/home/*/scripts",
+        "/home/*/bin",
         "/opt/scripts",
         "/root/scripts",
+        "/root/bin",
         "./scripts",
         "/usr/local/bin",
+        "/usr/local/scripts",
+        "~/scripts",
+        "~/bin",
       ];
 
       for (const dir of directories) {
         try {
+          // Search for .sh, .py, and executable files
           const output = await ssh.executeCommand(
-            `find ${dir} -maxdepth 1 -type f -name "*.sh" 2>/dev/null | head -20`
+            `find ${dir} -maxdepth 2 -type f \\( -name "*.sh" -o -name "*.py" -o -executable \\) 2>/dev/null | head -30`
           );
 
-          if (output) {
+          if (output && output.trim()) {
             const files = output.trim().split("\n");
             scripts = scripts.concat(
               files
-                .filter((f) => f.length > 0)
+                .filter((f) => f.length > 0 && !f.includes('Permission denied'))
                 .map((f) => ({
                   path: f,
                   name: f.split("/").pop(),
@@ -969,11 +1067,14 @@ app.get("/api/server/scripts", verifyToken, async (req, res) => {
           }
         } catch (e) {
           // Directory not found or no scripts
+          console.log(`Script search in ${dir} failed:`, e.message);
         }
       }
 
       // Remove duplicates
       scripts = Array.from(new Map(scripts.map((s) => [s.path, s])).values());
+      
+      console.log(`Found ${scripts.length} scripts on server`);
     } catch (e) {
       // If finding scripts fails, return empty array
       console.log("Script discovery error:", e.message);
@@ -981,11 +1082,11 @@ app.get("/api/server/scripts", verifyToken, async (req, res) => {
     }
 
     res.json({
-      scripts: scripts.slice(0, 20), // Limit to 20 scripts
+      scripts: scripts.slice(0, 30), // Limit to 30 scripts
       count: scripts.length,
     });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    res.status(500).json({ message: err.message, scripts: [], count: 0 });
   }
 });
 
