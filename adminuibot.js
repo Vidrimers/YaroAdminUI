@@ -270,7 +270,7 @@ bot.on("message", async (msg) => {
   }
 });
 
-console.log("\n��� YaroAdminUI Telegram Bot Started\n");
+console.log("\n[YaroAdminUI] Telegram Bot Started\n");
 
 process.on("SIGTERM", async () => {
   console.log("Shutting down bot...");

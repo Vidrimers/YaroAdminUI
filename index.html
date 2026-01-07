@@ -267,20 +267,31 @@
           </div>
         </div>
 
-        <!-- SERVICES AND PM2 CARD -->
+        <!-- SYSTEMCTL SERVICES CARD -->
         <div class="card">
           <div class="card-header">
-            <h2>🚀 Сервисы</h2>
+            <h2>⚙️ Systemctl сервисы</h2>
           </div>
           <div class="card-body">
-            <h4>Systemctl сервисы:</h4>
             <div id="systemctlList" class="services-list">
               <p class="text-muted">Загружаем сервисы...</p>
             </div>
+          </div>
+        </div>
 
-            <hr style="margin: 20px 0" />
-
-            <h4>PM2 процессы:</h4>
+        <!-- PM2 PROCESSES CARD -->
+        <div class="card">
+          <div class="card-header">
+            <h2>🚀 PM2 процессы</h2>
+          </div>
+          <div class="card-body">
+            <button
+              id="checkPm2Btn"
+              class="btn btn-sm btn-info"
+              style="margin-bottom: 10px"
+            >
+              🔍 Проверить PM2
+            </button>
             <div id="pm2List" class="services-list">
               <p class="text-muted">Нет PM2 процессов или PM2 не установлен</p>
             </div>
