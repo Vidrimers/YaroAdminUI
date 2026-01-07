@@ -553,7 +553,7 @@ class UIController {
     if (refreshProcessesBtn) {
       refreshProcessesBtn.addEventListener("click", async () => {
         refreshProcessesBtn.disabled = true;
-        refreshProcessesBtn.textContent = "🔄 Обновляю...";
+        refreshProcessesBtn.textContent = "⏳";
         try {
           await this.loadProcesses();
           this.toast.success("Процессы обновлены");
@@ -561,7 +561,25 @@ class UIController {
           this.toast.error("Ошибка обновления: " + error.message);
         } finally {
           refreshProcessesBtn.disabled = false;
-          refreshProcessesBtn.textContent = "🔄 Обновить";
+          refreshProcessesBtn.textContent = "🔄";
+        }
+      });
+    }
+
+    // Refresh Systemctl button
+    const refreshSystemctlBtn = document.getElementById("refreshSystemctlBtn");
+    if (refreshSystemctlBtn) {
+      refreshSystemctlBtn.addEventListener("click", async () => {
+        refreshSystemctlBtn.disabled = true;
+        refreshSystemctlBtn.textContent = "⏳";
+        try {
+          await this.loadServices();
+          this.toast.success("Сервисы обновлены");
+        } catch (error) {
+          this.toast.error("Ошибка обновления: " + error.message);
+        } finally {
+          refreshSystemctlBtn.disabled = false;
+          refreshSystemctlBtn.textContent = "🔄";
         }
       });
     }
@@ -571,16 +589,20 @@ class UIController {
     if (checkPm2Btn) {
       checkPm2Btn.addEventListener("click", async () => {
         checkPm2Btn.disabled = true;
-        checkPm2Btn.textContent = "🔍 Проверяю...";
+        checkPm2Btn.textContent = "⏳";
         try {
+          // First try to reload PM2 list
+          await this.loadServices();
+          this.toast.success("PM2 процессы обновлены");
+          
+          // Then show debug info
           const result = await this.api.executeCommand("check-pm2");
-          this.toast.info("PM2 вывод:\n" + result.output, 10000);
           console.log("PM2 check output:", result.output);
         } catch (error) {
           this.toast.error("Ошибка проверки PM2: " + error.message);
         } finally {
           checkPm2Btn.disabled = false;
-          checkPm2Btn.textContent = "🔍 Проверить PM2";
+          checkPm2Btn.textContent = "🔄";
         }
       });
     }
@@ -590,7 +612,7 @@ class UIController {
     if (refreshPortsBtn) {
       refreshPortsBtn.addEventListener("click", async () => {
         refreshPortsBtn.disabled = true;
-        refreshPortsBtn.textContent = "🔄";
+        refreshPortsBtn.textContent = "⏳";
         try {
           await this.loadPorts();
           this.toast.success("Порты обновлены");
@@ -1073,7 +1095,7 @@ class UIController {
       // Setup drag and drop for cards
       this.restoreCardLayout();
       this.setupDragAndDrop();
-      this.setupCardResize();
+      // this.setupCardResize(); // Disabled - cards now have fixed max-height with scroll
       this.setupCardCollapse();
       this.setupTerminal();
       this.setupScreenProcesses();
@@ -1515,32 +1537,36 @@ class UIController {
           screenList.innerHTML = "";
           data.sessions.forEach((session) => {
             const item = document.createElement("div");
-            item.style.cssText =
-              "display: flex; align-items: center; justify-content: space-between; padding: 10px; background: #f5f5f5; border-radius: 4px; border-left: 3px solid #667eea;";
+            item.className = "service-item";
+            
+            // All screen sessions in the list are running
+            const isActive = session.status === 'running';
+            const statusClass = isActive ? "status-active" : "status-inactive";
+            const statusText = isActive ? "✓ Запущен" : "✕ Остановлен";
+            const attachedInfo = session.isAttached ? " (Подключен)" : " (В фоне)";
 
-            const info = document.createElement("div");
-            info.innerHTML = `
-              <div style="font-weight: 500; color: #333;">${session.name}</div>
-              <div style="font-size: 12px; color: #888;">PID: ${session.pid} • ${session.status}</div>
+            item.innerHTML = `
+              <div style="flex: 1;">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                  <span style="font-weight: 500;">${session.name}</span>
+                  <span class="status-badge ${statusClass}">${statusText}${attachedInfo}</span>
+                </div>
+                <div style="font-size: 0.85em; color: #888; margin-top: 4px;">
+                  PID: ${session.pid} • ${session.fullName}
+                </div>
+              </div>
+              <div class="service-actions" style="margin-top: 10px;">
+                <button class="btn btn-sm btn-danger" data-screen-action="stop" data-screen-name="${session.fullName}">Остановка</button>
+                <button class="btn btn-sm btn-warning" data-screen-action="restart" data-screen-name="${session.fullName}">Перезагрузка</button>
+                <button class="btn btn-sm btn-info" data-screen-action="attach" data-screen-name="${session.fullName}">Подключиться</button>
+              </div>
             `;
 
-            const actions = document.createElement("div");
-            actions.style.cssText = "display: flex; gap: 6px;";
-
-            const attachBtn = document.createElement("button");
-            attachBtn.className = "btn btn-sm btn-primary";
-            attachBtn.textContent = "Подключиться";
-            attachBtn.addEventListener("click", () => {
-              const cmd = `screen -r ${session.fullName}`;
-              document.getElementById("terminalInput").value = cmd;
-              document.getElementById("terminalExecBtn").click();
-            });
-
-            actions.appendChild(attachBtn);
-            item.appendChild(info);
-            item.appendChild(actions);
             screenList.appendChild(item);
           });
+
+          // Setup screen action listeners
+          this.setupScreenControls();
         } else {
           screenList.innerHTML =
             '<p class="text-muted">Нет активных screen сессий</p>';
@@ -1555,6 +1581,59 @@ class UIController {
 
     // Refresh button
     refreshBtn.addEventListener("click", loadScreenProcesses);
+  }
+
+  setupScreenControls() {
+    document.querySelectorAll("[data-screen-action]").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const action = btn.getAttribute("data-screen-action");
+        const sessionName = btn.getAttribute("data-screen-name");
+
+        btn.disabled = true;
+        btn.textContent = "⏳ Выполняется...";
+
+        try {
+          const response = await fetch("/api/server/screen/manage", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${this.auth.token}`,
+            },
+            body: JSON.stringify({
+              sessionName: sessionName,
+              action: action,
+            }),
+          });
+
+          const result = await response.json();
+
+          if (result.success) {
+            this.toast.success(`Screen сессия ${sessionName}: ${action}`);
+            if (result.output) {
+              this.toast.info(result.output, 8000);
+            }
+            // Reload screen processes after action
+            setTimeout(() => {
+              const refreshBtn = document.getElementById("screenRefreshBtn");
+              if (refreshBtn) refreshBtn.click();
+            }, 1000);
+          } else {
+            this.toast.error(`Ошибка: ${result.output || result.message}`);
+          }
+        } catch (error) {
+          this.toast.error(`Ошибка: ${error.message}`);
+        } finally {
+          btn.disabled = false;
+          // Restore button text based on action
+          const actionTexts = {
+            stop: "Остановка",
+            restart: "Перезагрузка",
+            attach: "Подключиться",
+          };
+          btn.textContent = actionTexts[action] || action;
+        }
+      });
+    });
   }
 
   setupCardCollapse() {
@@ -1876,6 +1955,11 @@ class UIController {
 
     // Initialize notifications from the existing card
     this.notifications = [];
+    
+    // Hide badge initially
+    if (notificationsCount) {
+      notificationsCount.style.display = "none";
+    }
 
     // Toggle notifications menu
     if (notificationsToggle) {
@@ -1909,28 +1993,36 @@ class UIController {
     const notificationsList = document.getElementById("notificationsList");
 
     if (notificationsCount) {
-      notificationsCount.textContent = this.notifications.length;
-      notificationsCount.style.display = "inline-flex";
+      if (this.notifications.length > 0) {
+        notificationsCount.textContent = this.notifications.length;
+        notificationsCount.style.display = "inline-flex";
+      } else {
+        notificationsCount.style.display = "none";
+      }
     }
 
     // Render notifications
     if (notificationsList) {
-      notificationsList.innerHTML = this.notifications
-        .map(
-          (n) => `
-        <div class="notification-item" style="color: ${
-          n.type === "success"
-            ? "#4caf50"
-            : n.type === "error"
-            ? "#f44336"
-            : "#2196f3"
-        }">
-          <div>${n.message}</div>
-          <div class="notification-time">${n.timestamp}</div>
-        </div>
-      `
-        )
-        .join("");
+      if (this.notifications.length > 0) {
+        notificationsList.innerHTML = this.notifications
+          .map(
+            (n) => `
+          <div class="notification-item" style="color: ${
+            n.type === "success"
+              ? "#4caf50"
+              : n.type === "error"
+              ? "#f44336"
+              : "#2196f3"
+          }">
+            <div>${n.message}</div>
+            <div class="notification-time">${n.timestamp}</div>
+          </div>
+        `
+          )
+          .join("");
+      } else {
+        notificationsList.innerHTML = '<p class="text-muted">Нет уведомлений</p>';
+      }
     }
   }
 

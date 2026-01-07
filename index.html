@@ -253,8 +253,9 @@
               id="screenRefreshBtn"
               class="btn btn-sm btn-info"
               style="margin-left: auto"
+              title="Обновить Screen сессии"
             >
-              🔄 Обновить
+              🔄
             </button>
           </div>
           <div class="card-body">
@@ -271,6 +272,14 @@
         <div class="card">
           <div class="card-header">
             <h2>⚙️ Systemctl сервисы</h2>
+            <button
+              id="refreshSystemctlBtn"
+              class="btn btn-sm btn-info"
+              style="margin-left: auto"
+              title="Обновить Systemctl сервисы"
+            >
+              🔄
+            </button>
           </div>
           <div class="card-body">
             <div id="systemctlList" class="services-list">
@@ -283,15 +292,16 @@
         <div class="card">
           <div class="card-header">
             <h2>🚀 PM2 процессы</h2>
-          </div>
-          <div class="card-body">
             <button
               id="checkPm2Btn"
               class="btn btn-sm btn-info"
-              style="margin-bottom: 10px"
+              style="margin-left: auto"
+              title="Обновить PM2 процессы"
             >
-              🔍 Проверить PM2
+              🔄
             </button>
+          </div>
+          <div class="card-body">
             <div id="pm2List" class="services-list">
               <p class="text-muted">Нет PM2 процессов или PM2 не установлен</p>
             </div>
@@ -323,7 +333,8 @@
             <h2>🔌 Открытые порты</h2>
             <button
               id="refreshPorts"
-              class="btn btn-small"
+              class="btn btn-sm btn-info"
+              style="margin-left: auto"
               title="Обновить список портов"
             >
               🔄
@@ -346,10 +357,11 @@
             <h2>⚙️ Процессы (Top 30)</h2>
             <button
               id="refreshProcesses"
-              class="btn btn-small"
+              class="btn btn-sm btn-info"
               style="margin-left: auto"
+              title="Обновить список процессов"
             >
-              🔄 Обновить
+              🔄
             </button>
           </div>
           <div class="card-body">

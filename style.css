@@ -529,8 +529,7 @@ textarea.form-control {
   margin: 0 auto;
   display: grid;
   grid-template-columns: repeat(auto-fill, 350px);
-  grid-auto-rows: 10px;
-  grid-auto-flow: dense;
+  grid-auto-rows: auto;
   gap: 15px;
   padding: 0 20px;
   justify-content: center;
@@ -541,17 +540,16 @@ textarea.form-control {
   background: rgba(255, 255, 255, 0.05);
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 12px;
-  overflow: hidden;
+  overflow: visible;
   backdrop-filter: blur(10px);
   transition: all 0.3s ease;
   display: flex;
   flex-direction: column;
   width: 350px;
-  min-height: 300px;
-  max-height: 700px;
+  height: fit-content;
+  max-height: 600px;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
   position: relative;
-  grid-row: span 31;
 }
 
 .card:hover {
@@ -565,6 +563,7 @@ textarea.form-control {
   background: rgba(102, 126, 234, 0.1);
   padding: 15px 20px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px 12px 0 0;
 }
 
 .card-header h2 {
@@ -575,7 +574,29 @@ textarea.form-control {
 
 .card-body {
   padding: 20px;
-  flex: 1;
+  flex: 0 1 auto;
+  overflow-y: auto;
+  overflow-x: hidden;
+  border-radius: 0 0 12px 12px;
+}
+
+/* Scrollbar styles for card body */
+.card-body::-webkit-scrollbar {
+  width: 6px;
+}
+
+.card-body::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 4px;
+}
+
+.card-body::-webkit-scrollbar-thumb {
+  background: rgba(102, 126, 234, 0.4);
+  border-radius: 4px;
+}
+
+.card-body::-webkit-scrollbar-thumb:hover {
+  background: rgba(102, 126, 234, 0.6);
 }
 
 /* ==================== STATUS ITEMS ==================== */
@@ -881,7 +902,7 @@ h4 {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  max-height: 400px;
+  max-height: 100%;
   overflow-y: auto;
   padding-right: 8px;
 }
@@ -1086,45 +1107,16 @@ h4 {
   flex: 1;
 }
 
-/* ==================== CARD RESIZE ==================== */
+/* ==================== CARD RESIZE - DISABLED ==================== */
 .card {
   position: relative;
   display: flex;
   flex-direction: column;
 }
 
+/* Remove resize handle */
 .card::after {
-  content: "";
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  height: 6px;
-  cursor: ns-resize;
-  background: linear-gradient(
-    to right,
-    transparent,
-    rgba(102, 126, 234, 0.3),
-    transparent
-  );
-  opacity: 0;
-  transition: opacity 0.2s ease;
-  border-bottom-left-radius: 8px;
-  border-bottom-right-radius: 8px;
-}
-
-.card:hover::after {
-  opacity: 1;
-}
-
-.card.resizing {
-  user-select: none;
-}
-
-.card-body {
-  flex: 1;
-  overflow: hidden;
-  transition: max-height 0.3s ease, opacity 0.3s ease;
+  display: none;
 }
 
 /* Collapsed card state */
