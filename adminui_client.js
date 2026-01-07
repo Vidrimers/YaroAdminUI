@@ -451,7 +451,7 @@ class UIController {
           await this.api.addSSHKey(key);
           keyInput.value = "";
           this.toast.success("SSH ключ добавлен!");
-          this.loadSSHKeys();
+          // this.loadSSHKeys(); // Disabled - keys now shown only in modal
         } catch (error) {
           this.toast.error("Ошибка: " + error.message);
         }
@@ -624,6 +624,170 @@ class UIController {
         }
       });
     }
+
+    // Refresh scripts button
+    const refreshScriptsBtn = document.getElementById("refreshScriptsBtn");
+    if (refreshScriptsBtn) {
+      refreshScriptsBtn.addEventListener("click", async () => {
+        refreshScriptsBtn.disabled = true;
+        refreshScriptsBtn.textContent = "⏳";
+        try {
+          await this.loadScripts();
+          this.toast.success("Скрипты обновлены");
+        } catch (error) {
+          this.toast.error("Ошибка обновления: " + error.message);
+        } finally {
+          refreshScriptsBtn.disabled = false;
+          refreshScriptsBtn.textContent = "🔄";
+        }
+      });
+    }
+
+    // View server SSH keys button
+    const viewServerKeysBtn = document.getElementById("viewServerKeysBtn");
+    if (viewServerKeysBtn) {
+      viewServerKeysBtn.addEventListener("click", async () => {
+        this.openSshKeysModal();
+      });
+    }
+
+    // Setup SSH keys modal
+    this.setupSshKeysModal();
+  }
+
+  setupSshKeysModal() {
+    const modal = document.getElementById("sshKeysModal");
+    const closeBtn = document.getElementById("closeSshKeysModal");
+    const closeModalBtn = document.getElementById("closeSshKeysModalBtn");
+
+    if (closeBtn) {
+      closeBtn.addEventListener("click", () => {
+        modal.style.display = "none";
+      });
+    }
+
+    if (closeModalBtn) {
+      closeModalBtn.addEventListener("click", () => {
+        modal.style.display = "none";
+      });
+    }
+
+    // Close on outside click
+    modal.addEventListener("click", (e) => {
+      if (e.target === modal) {
+        modal.style.display = "none";
+      }
+    });
+  }
+
+  async openSshKeysModal() {
+    const modal = document.getElementById("sshKeysModal");
+    const keysList = document.getElementById("serverKeysList");
+
+    // Show modal
+    modal.style.display = "flex";
+
+    // Load keys
+    keysList.innerHTML = '<p class="text-muted">Загрузка...</p>';
+
+    try {
+      const response = await this.api.getSSHKeys();
+
+      if (response.keys && response.keys.length > 0) {
+        keysList.innerHTML = "";
+        response.keys.forEach((key) => {
+          const item = document.createElement("div");
+          item.style.cssText = `
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 10px;
+          `;
+
+          const keyDisplayId = `key-display-${key.id}`;
+          const isExpanded = false;
+
+          item.innerHTML = `
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+              <div>
+                <span style="font-weight: 500; color: #667eea;">${key.type}</span>
+                <span style="font-size: 0.85em; color: #888; margin-left: 10px;">${key.comment}</span>
+              </div>
+              <button class="btn btn-sm btn-danger" data-key-id="${key.id}" style="padding: 4px 12px;">
+                🗑️ Удалить
+              </button>
+            </div>
+            <div id="${keyDisplayId}" class="ssh-key-display" style="
+              font-family: 'Courier New', monospace; 
+              font-size: 0.8em; 
+              color: #a0a0a0; 
+              word-break: break-all;
+              cursor: pointer;
+              transition: color 0.2s;
+            " title="Нажмите для показа полного ключа">
+              ${key.key}
+            </div>
+          `;
+
+          // Add hover effect for key display
+          const keyDisplay = item.querySelector(`#${keyDisplayId}`);
+          keyDisplay.addEventListener('mouseenter', () => {
+            keyDisplay.style.color = '#667eea';
+          });
+          keyDisplay.addEventListener('mouseleave', () => {
+            if (!keyDisplay.dataset.expanded) {
+              keyDisplay.style.color = '#a0a0a0';
+            }
+          });
+
+          // Toggle full key display on click
+          keyDisplay.addEventListener('click', () => {
+            if (keyDisplay.dataset.expanded === 'true') {
+              // Collapse - show short version
+              keyDisplay.innerHTML = key.key;
+              keyDisplay.dataset.expanded = 'false';
+              keyDisplay.style.color = '#a0a0a0';
+              keyDisplay.title = 'Нажмите для показа полного ключа';
+            } else {
+              // Expand - show full key
+              keyDisplay.innerHTML = key.fullKey;
+              keyDisplay.dataset.expanded = 'true';
+              keyDisplay.style.color = '#667eea';
+              keyDisplay.title = 'Нажмите для скрытия полного ключа';
+            }
+          });
+
+          // Add delete button handler
+          const deleteBtn = item.querySelector('.btn-danger');
+          deleteBtn.addEventListener('click', async (e) => {
+            e.stopPropagation(); // Prevent triggering key display toggle
+            if (confirm(`Вы уверены, что хотите удалить SSH ключ "${key.comment}"?`)) {
+              try {
+                deleteBtn.disabled = true;
+                deleteBtn.textContent = 'Удаление...';
+                
+                await this.api.removeSSHKey(key.id);
+                this.toast.success('SSH ключ удален');
+                
+                // Reload keys list
+                await this.openSshKeysModal();
+              } catch (error) {
+                this.toast.error('Ошибка удаления ключа: ' + error.message);
+                deleteBtn.disabled = false;
+                deleteBtn.innerHTML = '🗑️ Удалить';
+              }
+            }
+          });
+
+          keysList.appendChild(item);
+        });
+      } else {
+        keysList.innerHTML = '<p class="text-muted">Нет SSH ключей на сервере</p>';
+      }
+    } catch (error) {
+      keysList.innerHTML = `<p class="text-muted" style="color: #f44336;">Ошибка: ${error.message}</p>`;
+    }
   }
 
   async loadDashboardData() {
@@ -631,7 +795,7 @@ class UIController {
       const status = await this.api.getServerStatus();
       this.updateServerStatus(status);
 
-      await this.loadSSHKeys();
+      // await this.loadSSHKeys(); // Disabled - keys now shown only in modal
       await this.loadServices();
       await this.loadPorts();
       await this.loadProcesses();
@@ -1103,7 +1267,41 @@ class UIController {
       this.setupThemes();
       this.setupNotificationsUI();
       this.setupSystemUI();
+      
+      // Setup auto grid layout
+      this.setupAutoGridLayout();
     });
+  }
+
+  setupAutoGridLayout() {
+    const resizeAllCards = () => {
+      const cards = document.querySelectorAll('.card');
+      cards.forEach(card => {
+        const height = card.offsetHeight;
+        const rowSpan = Math.ceil(height + 15); // +15 for gap
+        card.style.gridRowEnd = `span ${rowSpan}`;
+      });
+    };
+
+    // Initial resize
+    setTimeout(resizeAllCards, 100);
+    
+    // Resize on window resize
+    window.addEventListener('resize', resizeAllCards);
+    
+    // Resize when content changes (using MutationObserver)
+    const container = document.getElementById('cardsContainer');
+    if (container) {
+      const observer = new MutationObserver(() => {
+        setTimeout(resizeAllCards, 50);
+      });
+      
+      observer.observe(container, {
+        childList: true,
+        subtree: true,
+        characterData: true
+      });
+    }
   }
 
   setupLogout() {
