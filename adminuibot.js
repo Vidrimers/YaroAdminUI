@@ -104,6 +104,32 @@ function generateAuthCode() {
   return code;
 }
 
+// Helper function to identify service by port
+function getServiceName(port) {
+  const services = {
+    22: "SSH",
+    25: "SMTP",
+    53: "DNS",
+    80: "HTTP",
+    110: "POP3",
+    143: "IMAP",
+    443: "HTTPS",
+    465: "SMTPS",
+    587: "SMTP",
+    993: "IMAPS",
+    995: "POP3S",
+    3000: "Node App",
+    3306: "MySQL",
+    5432: "PostgreSQL",
+    6379: "Redis",
+    8000: "Web Service",
+    8080: "Web Service",
+    8443: "Web Service",
+    9000: "PHP-FPM",
+  };
+  return services[port] || null;
+}
+
 // Функция для вызова API AdminUI
 function callAdminUI(endpoint, method = "GET") {
   return new Promise((resolve, reject) => {
@@ -440,16 +466,121 @@ bot.on("message", async (msg) => {
       bot.sendMessage(chatId, `❌ Ошибка: ${error.message}`);
     }
   } else if (text === "🔥 Firewall" || text === "/firewall") {
-    bot.sendMessage(
-      chatId,
-      `🔥 <b>Управление Firewall</b>\n\n` +
-        `Используйте команды:\n` +
-        `/firewall_status - Статус firewall\n` +
-        `/open_port &lt;порт&gt; - Открыть порт\n` +
-        `/close_port &lt;порт&gt; - Закрыть порт\n\n` +
-        `Пример: /open_port 8080`,
-      { parse_mode: "HTML" }
-    );
+    if (!isAdmin(userId)) {
+      bot.sendMessage(chatId, `❌ Доступ запрещен! Только для администратора.`);
+      return;
+    }
+    
+    try {
+      bot.sendMessage(chatId, "⏳ Загружаю открытые порты...");
+
+      try {
+        // Get open ports using multiple methods
+        const portsMap = new Map();
+        
+        // Method 1: ss command
+        try {
+          const ssOutput = await executeSSHCommand(
+            "ss -tuln 2>/dev/null | awk 'NR>1 {print $1, $5}'"
+          );
+          
+          if (ssOutput) {
+            const lines = ssOutput.split("\n").filter(line => line.trim());
+            lines.forEach(line => {
+              const parts = line.trim().split(/\s+/);
+              if (parts.length >= 2) {
+                const protocol = parts[0].toLowerCase().replace(/6$/, '');
+                const address = parts[1];
+                const portMatch = address.match(/:(\d+)$/);
+                if (portMatch) {
+                  const port = parseInt(portMatch[1]);
+                  const key = `${port}-${protocol}`;
+                  if (!portsMap.has(key)) {
+                    portsMap.set(key, { port, protocol });
+                  }
+                }
+              }
+            });
+          }
+        } catch (e) {
+          console.log("ss failed:", e.message);
+        }
+        
+        // Method 2: netstat
+        try {
+          const netstatOutput = await executeSSHCommand(
+            "netstat -tuln 2>/dev/null | awk '/LISTEN|^udp/ {print $1, $4}'"
+          );
+          
+          if (netstatOutput) {
+            const lines = netstatOutput.split("\n").filter(line => line.trim());
+            lines.forEach(line => {
+              const parts = line.trim().split(/\s+/);
+              if (parts.length >= 2) {
+                const protocol = parts[0].toLowerCase().replace(/6$/, '');
+                const address = parts[1];
+                const portMatch = address.match(/:(\d+)$/);
+                if (portMatch) {
+                  const port = parseInt(portMatch[1]);
+                  const key = `${port}-${protocol}`;
+                  if (!portsMap.has(key)) {
+                    portsMap.set(key, { port, protocol });
+                  }
+                }
+              }
+            });
+          }
+        } catch (e) {
+          console.log("netstat failed:", e.message);
+        }
+        
+        const openPorts = Array.from(portsMap.values()).sort((a, b) => a.port - b.port);
+        
+        if (openPorts.length === 0) {
+          bot.sendMessage(chatId, "📭 Открытые порты не найдены");
+          return;
+        }
+
+        let response = "🔥 <b>Открытые порты:</b>\n\n";
+        
+        // Group by protocol
+        const tcpPorts = openPorts.filter(p => p.protocol === 'tcp');
+        const udpPorts = openPorts.filter(p => p.protocol === 'udp');
+        
+        if (tcpPorts.length > 0) {
+          response += "<b>TCP:</b>\n";
+          tcpPorts.forEach(p => {
+            const service = getServiceName(p.port);
+            response += `  • ${p.port}${service ? ` (${service})` : ''}\n`;
+          });
+          response += "\n";
+        }
+        
+        if (udpPorts.length > 0) {
+          response += "<b>UDP:</b>\n";
+          udpPorts.forEach(p => {
+            const service = getServiceName(p.port);
+            response += `  • ${p.port}${service ? ` (${service})` : ''}\n`;
+          });
+          response += "\n";
+        }
+        
+        response += `\n📊 Всего: ${openPorts.length} портов\n\n`;
+        response += `Команды:\n`;
+        response += `/open_port &lt;порт&gt; - Открыть порт\n`;
+        response += `/close_port &lt;порт&gt; - Закрыть порт\n`;
+        response += `/firewall_status - Статус firewall\n\n`;
+        response += `🔗 <a href="${ADMIN_UI_URL}">Открыть в админ-панели</a>`;
+        
+        bot.sendMessage(chatId, response, { parse_mode: "HTML" });
+        
+      } catch (sshError) {
+        console.error('Ports Error:', sshError);
+        bot.sendMessage(chatId, `❌ Ошибка при получении портов: ${sshError.message}`);
+      }
+    } catch (error) {
+      bot.sendMessage(chatId, `❌ Ошибка: ${error.message}`);
+    }
   } else if (text === "📜 Скрипты" || text === "/scripts") {
     bot.sendMessage(
       chatId,

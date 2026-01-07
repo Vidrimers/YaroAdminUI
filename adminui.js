@@ -1349,7 +1349,7 @@ app.post("/api/server/kill-process", verifyToken, async (req, res) => {
       return res.status(400).json({ message: "PID required" });
     }
 
-    const killSignal = signal || "9"; // Default to SIGKILL (-9)
+    const killSignal = String(signal || "9"); // Default to SIGKILL (-9), convert to string
     const allowedSignals = ["1", "2", "9", "15"]; // SIGHUP, SIGINT, SIGKILL, SIGTERM
 
     if (!allowedSignals.includes(killSignal)) {
