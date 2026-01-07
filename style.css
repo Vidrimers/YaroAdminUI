@@ -479,11 +479,12 @@ textarea.form-control {
   margin: 0 auto;
   display: grid;
   grid-template-columns: repeat(auto-fill, 350px);
-  grid-auto-rows: minmax(200px, auto);
-  gap: 20px;
+  grid-auto-rows: 20px;
+  grid-auto-flow: dense;
+  gap: 15px;
   padding: 0 20px;
   justify-content: center;
-  place-content: center;
+  align-content: start;
 }
 
 .card {
@@ -500,6 +501,7 @@ textarea.form-control {
   max-height: 700px;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
   position: relative;
+  grid-row: span 16;
 }
 
 .card:hover {
@@ -507,14 +509,6 @@ textarea.form-control {
   border-color: rgba(255, 255, 255, 0.15);
   transform: translateY(-5px);
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.2);
-}
-
-/* Card positioning for large resized cards */
-.card[style*="height: 400px"],
-.card[style*="height: 500px"],
-.card[style*="height: 600px"] {
-  grid-column: span 1;
-  grid-row: span 2;
 }
 
 .card-header {
@@ -1027,13 +1021,9 @@ h4 {
   font-size: 0.75em;
 }
 
-/* ==================== DRAG & DROP ==================== */
-.card[draggable="true"] {
-  user-select: none;
-}
-
+/* ==================== DRAG & DROP - DISABLED ==================== */
 .card-header {
-  cursor: grab;
+  cursor: default;
   user-select: none;
   transition: all 0.2s ease;
   display: flex;
@@ -1044,24 +1034,6 @@ h4 {
 .card-header h2 {
   margin: 0;
   flex: 1;
-}
-
-.card-header:active {
-  cursor: grabbing;
-}
-
-.card[draggable="true"]:hover {
-  box-shadow: 0 8px 16px rgba(102, 126, 234, 0.2);
-  transform: translateY(-2px);
-}
-
-.card[draggable="true"].dragging {
-  opacity: 0.5 !important;
-  background: rgba(102, 126, 234, 0.1);
-}
-
-.container {
-  transition: all 0.3s ease;
 }
 
 /* ==================== CARD RESIZE ==================== */
@@ -1430,4 +1402,135 @@ body.theme-cyberpunk .card-header h2 {
   background: rgba(255, 193, 7, 0.2);
   color: #ffc107;
   border: 1px solid #ffc107;
+}
+
+/* ==================== MODAL ==================== */
+.modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+  backdrop-filter: blur(5px);
+}
+
+.modal-content {
+  background: rgba(30, 30, 40, 0.98);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 15px;
+  width: 90%;
+  max-width: 600px;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+}
+
+.modal-header {
+  padding: 20px 25px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.modal-header h2 {
+  margin: 0;
+  color: #667eea;
+  font-size: 1.5em;
+}
+
+.modal-close {
+  background: none;
+  border: none;
+  color: #888;
+  font-size: 2em;
+  cursor: pointer;
+  padding: 0;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  transition: all 0.3s ease;
+}
+
+.modal-close:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+}
+
+.modal-body {
+  padding: 25px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.modal-footer {
+  padding: 20px 25px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+/* ==================== SORTABLE LIST ==================== */
+.sortable-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.sortable-item {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  padding: 15px 20px;
+  cursor: move;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  user-select: none;
+}
+
+.sortable-item:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(102, 126, 234, 0.5);
+  transform: translateX(5px);
+}
+
+.sortable-item.dragging {
+  opacity: 0.5;
+  background: rgba(102, 126, 234, 0.2);
+  transform: scale(1.05);
+}
+
+.sortable-item.drag-over {
+  border-color: #667eea;
+  border-style: dashed;
+  background: rgba(102, 126, 234, 0.1);
+}
+
+.sortable-handle {
+  color: #888;
+  font-size: 1.5em;
+  cursor: grab;
+}
+
+.sortable-handle:active {
+  cursor: grabbing;
+}
+
+.sortable-title {
+  flex: 1;
+  color: #e0e0e0;
+  font-weight: 500;
+  font-size: 1.1em;
 }

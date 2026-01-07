@@ -121,6 +121,9 @@
           <p id="userInfo">Вы вошли как: <span id="username">Admin</span></p>
         </div>
         <div class="header-controls">
+          <button id="sortBtn" class="btn btn-secondary" title="Сортировать карточки">
+            📋 Sort
+          </button>
           <div class="theme-dropdown">
             <button
               id="themeToggle"
@@ -214,7 +217,7 @@
       <!-- CONTAINER WITH CARDS -->
       <div class="container" id="cardsContainer">
         <!-- SERVER STATUS CARD -->
-        <div class="card" draggable="true">
+        <div class="card">
           <div class="card-header">
             <h2>🖥️ Статус сервера</h2>
           </div>
@@ -243,7 +246,7 @@
         </div>
 
         <!-- SCREEN PROCESSES CARD -->
-        <div class="card" draggable="true">
+        <div class="card">
           <div class="card-header">
             <h2>📺 Screen сессии</h2>
             <button
@@ -265,7 +268,7 @@
         </div>
 
         <!-- SERVICES AND PM2 CARD -->
-        <div class="card" draggable="true">
+        <div class="card">
           <div class="card-header">
             <h2>🚀 Сервисы</h2>
           </div>
@@ -285,7 +288,7 @@
         </div>
 
         <!-- SCRIPTS CARD -->
-        <div class="card" draggable="true">
+        <div class="card">
           <div class="card-header">
             <h2>📜 Скрипты</h2>
           </div>
@@ -304,7 +307,7 @@
         </div>
 
         <!-- PORTS CARD -->
-        <div class="card" draggable="true">
+        <div class="card">
           <div class="card-header">
             <h2>🔌 Открытые порты</h2>
             <button
@@ -327,7 +330,7 @@
         </div>
 
         <!-- PROCESSES CARD -->
-        <div class="card" draggable="true">
+        <div class="card">
           <div class="card-header">
             <h2>⚙️ Процессы (Top 30)</h2>
             <button
@@ -350,7 +353,7 @@
         </div>
 
         <!-- LOGS CARD -->
-        <div class="card" draggable="true">
+        <div class="card">
           <div class="card-header">
             <h2>📝 Логи операций</h2>
           </div>
@@ -366,7 +369,7 @@
         </div>
 
         <!-- SSH KEY MANAGEMENT CARD -->
-        <div class="card" draggable="true">
+        <div class="card">
           <div class="card-header">
             <h2>🔑 Управление SSH ключами</h2>
           </div>
@@ -393,7 +396,7 @@
         </div>
 
         <!-- FIREWALL CARD -->
-        <div class="card" draggable="true">
+        <div class="card">
           <div class="card-header">
             <h2>🔥 Firewall</h2>
           </div>
@@ -451,7 +454,7 @@
         </div>
 
         <!-- TERMINAL CARD -->
-        <div class="card" draggable="true">
+        <div class="card">
           <div class="card-header">
             <h2>💻 Терминал</h2>
           </div>
@@ -514,7 +517,7 @@
         </div>
 
         <!-- VPN CONFIGURATION CARD -->
-        <div class="card" draggable="true">
+        <div class="card">
           <div class="card-header">
             <h2>🔐 VPN Конфигурация</h2>
           </div>
@@ -647,6 +650,28 @@
 
     <!-- TOAST NOTIFICATIONS -->
     <div id="toastContainer" class="toast-container"></div>
+
+    <!-- SORT MODAL -->
+    <div id="sortModal" class="modal" style="display: none">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2>📋 Сортировка карточек</h2>
+          <button id="closeSortModal" class="modal-close">&times;</button>
+        </div>
+        <div class="modal-body">
+          <p class="text-muted" style="margin-bottom: 15px">
+            Перетащите карточки для изменения порядка
+          </p>
+          <div id="sortableList" class="sortable-list">
+            <!-- Список карточек будет добавлен динамически -->
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button id="cancelSort" class="btn btn-secondary">Отмена</button>
+          <button id="saveSort" class="btn btn-success">Сохранить</button>
+        </div>
+      </div>
+    </div>
 
     <script src="config.js"></script>
     <script src="adminui_client.js"></script>

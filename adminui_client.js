@@ -1067,75 +1067,166 @@ class UIController {
   }
 
   setupDragAndDrop() {
+    // Drag and drop disabled - use Sort modal instead
+    // Setup sort button
+    const sortBtn = document.getElementById("sortBtn");
+    const sortModal = document.getElementById("sortModal");
+    const closeSortModal = document.getElementById("closeSortModal");
+    const cancelSort = document.getElementById("cancelSort");
+    const saveSort = document.getElementById("saveSort");
+    const sortableList = document.getElementById("sortableList");
+
+    if (!sortBtn || !sortModal) return;
+
+    // Open modal
+    sortBtn.addEventListener("click", () => {
+      this.openSortModal();
+    });
+
+    // Close modal
+    closeSortModal.addEventListener("click", () => {
+      sortModal.style.display = "none";
+    });
+
+    cancelSort.addEventListener("click", () => {
+      sortModal.style.display = "none";
+    });
+
+    // Save sort order
+    saveSort.addEventListener("click", () => {
+      this.saveSortOrder();
+      sortModal.style.display = "none";
+      this.toast.success("Порядок карточек сохранен!");
+    });
+
+    // Close on outside click
+    sortModal.addEventListener("click", (e) => {
+      if (e.target === sortModal) {
+        sortModal.style.display = "none";
+      }
+    });
+  }
+
+  openSortModal() {
+    const sortModal = document.getElementById("sortModal");
+    const sortableList = document.getElementById("sortableList");
     const container = document.getElementById("cardsContainer");
-    let draggedElement = null;
+    const cards = Array.from(container.querySelectorAll(".card"));
 
-    // Add drag event listeners to card headers only
-    const headers = container.querySelectorAll(".card-header");
+    // Clear list
+    sortableList.innerHTML = "";
 
-    headers.forEach((header) => {
-      const card = header.closest(".card");
+    // Add cards to sortable list
+    cards.forEach((card, index) => {
+      const title = card.querySelector("h2")?.textContent || `Card ${index + 1}`;
+      const item = document.createElement("div");
+      item.className = "sortable-item";
+      item.draggable = true;
+      item.dataset.title = title;
+      item.innerHTML = `
+        <span class="sortable-handle">☰</span>
+        <span class="sortable-title">${title}</span>
+      `;
 
-      // Make header draggable
-      header.draggable = true;
-      header.style.cursor = "grab";
-      header.style.userSelect = "none";
+      sortableList.appendChild(item);
+    });
 
-      header.addEventListener("dragstart", (e) => {
-        draggedElement = card;
-        card.style.opacity = "0.5";
-        card.style.transform = "scale(0.98)";
+    // Setup drag and drop for sortable items
+    this.setupSortableDragDrop();
+
+    // Show modal
+    sortModal.style.display = "flex";
+  }
+
+  setupSortableDragDrop() {
+    const sortableList = document.getElementById("sortableList");
+    let draggedItem = null;
+
+    const items = sortableList.querySelectorAll(".sortable-item");
+
+    items.forEach((item) => {
+      item.addEventListener("dragstart", (e) => {
+        draggedItem = item;
+        item.classList.add("dragging");
         e.dataTransfer.effectAllowed = "move";
       });
 
-      header.addEventListener("dragend", (e) => {
-        if (draggedElement) {
-          draggedElement.style.opacity = "1";
-          draggedElement.style.transform = "scale(1)";
-        }
-        draggedElement = null;
+      item.addEventListener("dragend", () => {
+        item.classList.remove("dragging");
+        draggedItem = null;
       });
-    });
 
-    // Add dragover listeners to cards
-    const cards = container.querySelectorAll(".card");
-    cards.forEach((card) => {
-      card.addEventListener("dragover", (e) => {
+      item.addEventListener("dragover", (e) => {
         e.preventDefault();
-        e.dataTransfer.dropEffect = "move";
-
-        if (draggedElement && draggedElement !== card) {
-          const rect = card.getBoundingClientRect();
+        if (draggedItem && draggedItem !== item) {
+          const rect = item.getBoundingClientRect();
           const midpoint = rect.top + rect.height / 2;
 
           if (e.clientY < midpoint) {
-            card.parentNode.insertBefore(draggedElement, card);
+            sortableList.insertBefore(draggedItem, item);
           } else {
-            card.parentNode.insertBefore(draggedElement, card.nextSibling);
+            sortableList.insertBefore(draggedItem, item.nextSibling);
           }
         }
       });
 
-      card.addEventListener("drop", (e) => {
+      item.addEventListener("dragenter", (e) => {
+        if (draggedItem && draggedItem !== item) {
+          item.classList.add("drag-over");
+        }
+      });
+
+      item.addEventListener("dragleave", () => {
+        item.classList.remove("drag-over");
+      });
+
+      item.addEventListener("drop", (e) => {
         e.preventDefault();
-        this.saveCardLayout();
+        item.classList.remove("drag-over");
       });
     });
   }
 
+  saveSortOrder() {
+    const sortableList = document.getElementById("sortableList");
+    const items = Array.from(sortableList.querySelectorAll(".sortable-item"));
+    const layout = items.map((item) => item.dataset.title);
+
+    // Save to localStorage
+    localStorage.setItem("cardLayout", JSON.stringify(layout));
+
+    // Apply new order to actual cards
+    const container = document.getElementById("cardsContainer");
+    const cards = Array.from(container.querySelectorAll(".card"));
+
+    // Create a map of cards by their titles
+    const cardMap = {};
+    cards.forEach((card) => {
+      const title = card.querySelector("h2")?.textContent || "Unknown";
+      cardMap[title] = card;
+    });
+
+    // Reorder cards based on new layout
+    layout.forEach((title) => {
+      if (cardMap[title]) {
+        container.appendChild(cardMap[title]);
+      }
+    });
+
+    // Save to database
+    this.syncSettingsToDatabase();
+  }
+
   saveCardLayout() {
+    // This function is now handled by saveSortOrder
     const container = document.getElementById("cardsContainer");
     const cards = Array.from(container.querySelectorAll(".card"));
     const layout = cards.map((card) => {
-      // Get card title from h2
       const title = card.querySelector("h2")?.textContent || "Unknown";
       return title;
     });
 
     localStorage.setItem("cardLayout", JSON.stringify(layout));
-    console.log("Card layout saved to localStorage:", layout);
-
-    // Also save to database
     this.syncSettingsToDatabase();
   }
 
@@ -1175,6 +1266,13 @@ class UIController {
     const cards = container.querySelectorAll(".card");
     const allResizeData = {}; // Shared state for all cards
 
+    // Helper function to calculate grid row span based on height
+    const calculateGridSpan = (height) => {
+      // Each grid row is 20px, so we calculate how many rows the card needs
+      // Add 1 extra row for padding/margin
+      return Math.ceil(height / 20) + 1;
+    };
+
     cards.forEach((card) => {
       const handler = (e) => {
         // Only if clicking on the bottom 6px area (the ::after element)
@@ -1197,13 +1295,8 @@ class UIController {
             card.style.height = newHeight + "px";
 
             // Auto-adjust grid span based on height
-            if (newHeight > 500) {
-              card.style.gridRow = "span 3";
-            } else if (newHeight > 350) {
-              card.style.gridRow = "span 2";
-            } else {
-              card.style.gridRow = "span 1";
-            }
+            const span = calculateGridSpan(newHeight);
+            card.style.gridRow = `span ${span}`;
           }
         };
 
@@ -1255,6 +1348,11 @@ class UIController {
       const container = document.getElementById("cardsContainer");
       const cards = container.querySelectorAll(".card");
 
+      // Helper function to calculate grid row span based on height
+      const calculateGridSpan = (height) => {
+        return Math.ceil(height / 20) + 1;
+      };
+
       cards.forEach((card) => {
         const title = card.querySelector("h2")?.textContent;
         if (title && heights[title]) {
@@ -1263,13 +1361,8 @@ class UIController {
             card.style.height = heightValue + "px";
 
             // Auto-adjust grid span based on height
-            if (heightValue > 500) {
-              card.style.gridRow = "span 3";
-            } else if (heightValue > 350) {
-              card.style.gridRow = "span 2";
-            } else {
-              card.style.gridRow = "span 1";
-            }
+            const span = calculateGridSpan(heightValue);
+            card.style.gridRow = `span ${span}`;
           }
         }
       });
