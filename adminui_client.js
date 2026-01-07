@@ -171,6 +171,10 @@ class APIService {
     return this.request("/server/ports");
   }
 
+  async getFirewallRules() {
+    return this.request("/server/firewall");
+  }
+
   async controlService(name, action) {
     return this.request(`/server/services/${name}/${action}`, "POST");
   }
@@ -1073,6 +1077,7 @@ class UIController {
 
   async loadPorts() {
     try {
+      // Load listening ports
       const response = await this.api.getPorts();
       const portsList = document.getElementById("portsList");
       portsList.innerHTML = "";
@@ -1092,6 +1097,51 @@ class UIController {
         portsList.innerHTML = html;
       } else {
         portsList.innerHTML = '<p class="text-muted">Нет открытых портов</p>';
+      }
+      
+      // Load firewall rules
+      const firewallResponse = await this.api.getFirewallRules();
+      const firewallRules = document.getElementById("firewallRules");
+      firewallRules.innerHTML = "";
+      
+      if (firewallResponse.status === "not_installed") {
+        firewallRules.innerHTML = '<p class="text-muted">UFW не установлен</p>';
+      } else if (firewallResponse.status === "inactive") {
+        firewallRules.innerHTML = '<p class="text-muted">⚠️ UFW отключен</p>';
+      } else if (firewallResponse.status === "active") {
+        if (firewallResponse.rules && firewallResponse.rules.length > 0) {
+          let html = '<div class="firewall-table">';
+          firewallResponse.rules.forEach((rule) => {
+            const actionColor = rule.action === 'ALLOW' ? '#4caf50' : '#f44336';
+            // Truncate long "from" text
+            let fromText = rule.from;
+            if (fromText.includes('#')) {
+              fromText = fromText.split('#')[0].trim();
+            }
+            if (fromText.length > 25) {
+              fromText = fromText.substring(0, 22) + '...';
+            }
+            
+            html += `
+              <div class="firewall-item" title="${rule.from}">
+                <div class="port-number">${rule.port}</div>
+                <div class="port-protocol">${rule.protocol.toUpperCase()}</div>
+                <div class="firewall-action" style="color: ${actionColor}; font-weight: 600;">
+                  ${rule.action}
+                </div>
+                <div class="firewall-from" style="font-size: 12px; color: var(--text-muted);">
+                  ${fromText}
+                </div>
+              </div>
+            `;
+          });
+          html += "</div>";
+          firewallRules.innerHTML = html;
+        } else {
+          firewallRules.innerHTML = '<p class="text-muted">Нет правил</p>';
+        }
+      } else {
+        firewallRules.innerHTML = '<p class="text-muted">Ошибка загрузки правил</p>';
       }
     } catch (error) {
       console.error("Error loading ports:", error);

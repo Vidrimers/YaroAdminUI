@@ -353,12 +353,26 @@
             </button>
           </div>
           <div class="card-body">
-            <div
-              id="portsList"
-              class="ports-list"
-              style="max-height: 100%; overflow-y: auto"
-            >
-              <p class="text-muted">Загружаем порты...</p>
+            <div style="max-height: 100%; overflow-y: auto">
+              <!-- Listening Ports Section -->
+              <div style="margin-bottom: 20px;">
+                <h3 style="font-size: 14px; font-weight: 600; margin-bottom: 10px; color: var(--text-color);">
+                  📡 Порты в режиме прослушивания
+                </h3>
+                <div id="portsList" class="ports-list">
+                  <p class="text-muted">Загружаем порты...</p>
+                </div>
+              </div>
+              
+              <!-- Firewall Rules Section -->
+              <div>
+                <h3 style="font-size: 14px; font-weight: 600; margin-bottom: 10px; color: var(--text-color);">
+                  🛡️ Правила Firewall (UFW)
+                </h3>
+                <div id="firewallRules" class="firewall-rules">
+                  <p class="text-muted">Загружаем правила...</p>
+                </div>
+              </div>
             </div>
           </div>
         </div>

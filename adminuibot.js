@@ -32,6 +32,9 @@ class DB {
 const bot = new TelegramBot(TELEGRAM_BOT_TOKEN, { polling: true });
 const db = new DB(DB_PATH);
 
+// User states for interactive commands
+const userStates = new Map();
+
 // Функция для выполнения SSH команд
 function executeSSHCommand(command) {
   return new Promise((resolve, reject) => {
@@ -730,51 +733,77 @@ bot.on("message", async (msg) => {
         { parse_mode: "HTML" }
       );
     }
-  } else if (text.startsWith("/open_port ")) {
+  } else if (text.startsWith("/open_port")) {
+    if (!isAdmin(userId)) {
+      bot.sendMessage(chatId, `❌ Доступ запрещен! Только для администратора.`);
+      return;
+    }
+    
+    const port = text.substring(10).trim();
+    
+    // If port is provided in command
+    if (port && port.match(/^\d+$/)) {
+      try {
+        bot.sendMessage(chatId, `⏳ Открываю порт ${port}...`);
+        await executeSSHCommand(`
+          sudo ufw delete deny ${port} 2>/dev/null || true;
+          sudo ufw delete deny ${port}/tcp 2>/dev/null || true;
+          sudo ufw delete deny ${port}/udp 2>/dev/null || true;
+          sudo ufw allow ${port}
+        `.replace(/\n/g, ' '));
+        bot.sendMessage(chatId, `✅ Порт ${port} успешно открыт в firewall`);
+      } catch (error) {
+        bot.sendMessage(chatId, `❌ Ошибка: ${error.message}`);
+      }
+    } else {
+      // Interactive mode - ask for port number
+      userStates.set(userId, { action: 'open_port' });
+      bot.sendMessage(
+        chatId,
+        "🔓 Введите номер порта который нужно открыть:\n\nПример: 8080",
+        { 
+          reply_markup: {
+            force_reply: true,
+            selective: true
+          }
+        }
+      );
+    }
+  } else if (text.startsWith("/close_port")) {
     if (!isAdmin(userId)) {
       bot.sendMessage(chatId, `❌ Доступ запрещен! Только для администратора.`);
       return;
     }
     
     const port = text.substring(11).trim();
-    if (!port || !port.match(/^\d+$/)) {
+    
+    // If port is provided in command
+    if (port && port.match(/^\d+$/)) {
+      try {
+        bot.sendMessage(chatId, `⏳ Закрываю порт ${port}...`);
+        await executeSSHCommand(`
+          sudo ufw delete allow ${port} 2>/dev/null || true;
+          sudo ufw delete allow ${port}/tcp 2>/dev/null || true;
+          sudo ufw delete allow ${port}/udp 2>/dev/null || true;
+          sudo ufw deny ${port}
+        `.replace(/\n/g, ' '));
+        bot.sendMessage(chatId, `✅ Порт ${port} успешно закрыт в firewall`);
+      } catch (error) {
+        bot.sendMessage(chatId, `❌ Ошибка: ${error.message}`);
+      }
+    } else {
+      // Interactive mode - ask for port number
+      userStates.set(userId, { action: 'close_port' });
       bot.sendMessage(
         chatId,
-        "❌ Неверный формат. Используйте: /open_port &lt;порт&gt;\nПример: /open_port 8080",
-        { parse_mode: "HTML" }
+        "🔒 Введите номер порта который нужно закрыть:\n\nПример: 8080",
+        { 
+          reply_markup: {
+            force_reply: true,
+            selective: true
+          }
+        }
       );
-      return;
-    }
-    
-    try {
-      bot.sendMessage(chatId, `⏳ Открываю порт ${port}...`);
-      await executeSSHCommand(`sudo ufw allow ${port}`);
-      bot.sendMessage(chatId, `✅ Порт ${port} успешно открыт`);
-    } catch (error) {
-      bot.sendMessage(chatId, `❌ Ошибка: ${error.message}`);
-    }
-  } else if (text.startsWith("/close_port ")) {
-    if (!isAdmin(userId)) {
-      bot.sendMessage(chatId, `❌ Доступ запрещен! Только для администратора.`);
-      return;
-    }
-    
-    const port = text.substring(12).trim();
-    if (!port || !port.match(/^\d+$/)) {
-      bot.sendMessage(
-        chatId,
-        "❌ Неверный формат. Используйте: /close_port &lt;порт&gt;\nПример: /close_port 8080",
-        { parse_mode: "HTML" }
-      );
-      return;
-    }
-    
-    try {
-      bot.sendMessage(chatId, `⏳ Закрываю порт ${port}...`);
-      await executeSSHCommand(`sudo ufw deny ${port}`);
-      bot.sendMessage(chatId, `✅ Порт ${port} успешно закрыт`);
-    } catch (error) {
-      bot.sendMessage(chatId, `❌ Ошибка: ${error.message}`);
     }
   } else if (text.startsWith("/run_script ")) {
     if (!isAdmin(userId)) {
@@ -804,6 +833,60 @@ bot.on("message", async (msg) => {
       bot.sendMessage(chatId, `❌ Ошибка: ${error.message}`);
     }
   } else {
+    // Check if user is in interactive mode
+    const userState = userStates.get(userId);
+    
+    if (userState) {
+      // Handle interactive responses
+      if (userState.action === 'open_port') {
+        const port = text.trim();
+        
+        if (!port.match(/^\d+$/)) {
+          bot.sendMessage(chatId, "❌ Неверный формат. Введите только номер порта (например: 8080)");
+          return;
+        }
+        
+        userStates.delete(userId);
+        
+        try {
+          bot.sendMessage(chatId, `⏳ Открываю порт ${port}...`);
+          await executeSSHCommand(`
+            sudo ufw delete deny ${port} 2>/dev/null || true;
+            sudo ufw delete deny ${port}/tcp 2>/dev/null || true;
+            sudo ufw delete deny ${port}/udp 2>/dev/null || true;
+            sudo ufw allow ${port}
+          `.replace(/\n/g, ' '));
+          bot.sendMessage(chatId, `✅ Порт ${port} успешно открыт в firewall`);
+        } catch (error) {
+          bot.sendMessage(chatId, `❌ Ошибка: ${error.message}`);
+        }
+        return;
+      } else if (userState.action === 'close_port') {
+        const port = text.trim();
+        
+        if (!port.match(/^\d+$/)) {
+          bot.sendMessage(chatId, "❌ Неверный формат. Введите только номер порта (например: 8080)");
+          return;
+        }
+        
+        userStates.delete(userId);
+        
+        try {
+          bot.sendMessage(chatId, `⏳ Закрываю порт ${port}...`);
+          await executeSSHCommand(`
+            sudo ufw delete allow ${port} 2>/dev/null || true;
+            sudo ufw delete allow ${port}/tcp 2>/dev/null || true;
+            sudo ufw delete allow ${port}/udp 2>/dev/null || true;
+            sudo ufw deny ${port}
+          `.replace(/\n/g, ' '));
+          bot.sendMessage(chatId, `✅ Порт ${port} успешно закрыт в firewall`);
+        } catch (error) {
+          bot.sendMessage(chatId, `❌ Ошибка: ${error.message}`);
+        }
+        return;
+      }
+    }
+    
     // Неизвестная команда
     bot.sendMessage(
       chatId,
