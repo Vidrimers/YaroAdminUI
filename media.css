@@ -163,6 +163,36 @@
     max-width: none !important;
   }
 
+  /* Dropdown menus centered with higher z-index */
+  #themeToggle,
+  #notificationsToggle,
+  #systemToggle,
+  #serverStatusToggle {
+    position: relative;
+    z-index: 10001;
+  }
+
+  .theme-menu,
+  .notifications-menu,
+  .system-menu,
+  #serverStatusMenu {
+    left: 50% !important;
+    right: auto !important;
+    transform: translateX(-50%) !important;
+    z-index: 10002 !important;
+  }
+
+  .theme-menu{
+    left: 20% !important;
+  }
+  .system-menu{
+    left: 90% !important;
+  }
+
+  .notifications-dropdown, .system-dropdown{
+    z-index: 10000;
+  }
+
   .card {
     max-height: 400px;
   }
