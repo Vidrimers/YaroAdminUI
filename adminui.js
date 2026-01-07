@@ -1545,6 +1545,19 @@ app.post("/api/server/terminal", verifyToken, async (req, res) => {
           output: error.message || "Command failed",
           command: command,
         });
+        
+        // Add helpful hint for common errors
+        if (error.message && error.message.includes('command not found')) {
+          const cmdName = command.trim().split(' ')[0];
+          if (cmdName.endsWith('.sh') || cmdName.endsWith('.py')) {
+            res.json({
+              success: false,
+              output: `${error.message}\n\n💡 Подсказка: Попробуйте:\n  ./${cmdName}  (если скрипт в текущей директории)\n  bash ${cmdName}  (запуск через bash)\n  /полный/путь/${cmdName}  (полный путь к скрипту)`,
+              command: command,
+            });
+            return;
+          }
+        }
       }
     }
   } catch (err) {
