@@ -297,6 +297,8 @@ textarea.form-control {
   border-radius: 10px;
   border: 1px solid rgba(255, 255, 255, 0.1);
   backdrop-filter: blur(10px);
+  position: relative;
+  z-index: 9999;
 }
 
 .header-content {
@@ -324,10 +326,13 @@ textarea.form-control {
   display: flex;
   gap: 15px;
   align-items: center;
+  position: relative;
+  z-index: 10001;
 }
 
 .theme-dropdown {
   position: relative;
+  z-index: 10001;
 }
 
 #themeToggle {
@@ -356,7 +361,7 @@ textarea.form-control {
   margin-top: 5px;
   min-width: 180px;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
-  z-index: 1000;
+  z-index: 10000;
 }
 
 .theme-option {
@@ -388,6 +393,12 @@ textarea.form-control {
 /* Notifications dropdown menu */
 .notifications-dropdown {
   position: relative;
+  z-index: 10001;
+}
+
+.system-dropdown {
+  position: relative;
+  z-index: 10001;
 }
 
 #notificationsToggle {
@@ -438,7 +449,46 @@ textarea.form-control {
   max-height: 400px;
   overflow-y: auto;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
-  z-index: 1000;
+  z-index: 10000;
+}
+
+.system-menu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  background: rgba(30, 30, 30, 0.98);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  margin-top: 5px;
+  min-width: 200px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  z-index: 10000;
+}
+
+.system-option {
+  display: block;
+  width: 100%;
+  padding: 10px 15px;
+  background: none;
+  border: none;
+  color: #e0e0e0;
+  text-align: left;
+  cursor: pointer;
+  font-size: 0.9em;
+  transition: all 0.2s ease;
+}
+
+.system-option:first-child {
+  border-radius: 8px 8px 0 0;
+}
+
+.system-option:last-child {
+  border-radius: 0 0 8px 8px;
+}
+
+.system-option:hover {
+  background: rgba(255, 152, 0, 0.2);
+  color: #ff9800;
 }
 
 .notifications-list-header {
