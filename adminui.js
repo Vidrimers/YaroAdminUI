@@ -1500,9 +1500,10 @@ app.post("/api/server/terminal", verifyToken, async (req, res) => {
     try {
       // Add timeout for long-running commands
       const timeout = 30000; // 30 seconds
+      // Wrap in bash -c to support built-in commands like cd
       const commandWithTimeout = `timeout ${Math.floor(
         timeout / 1000
-      )} ${command}`;
+      )} bash -c ${JSON.stringify(command)}`;
 
       let output = await ssh.executeCommand(commandWithTimeout);
 
