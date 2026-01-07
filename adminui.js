@@ -1040,7 +1040,7 @@ app.post("/api/server/manage-service", verifyToken, async (req, res) => {
       });
     }
 
-    const { execSync } = require("child_process");
+    const ssh = new SSHHelper(SERVER_IP);
     let output = "";
 
     try {
@@ -1062,11 +1062,11 @@ app.post("/api/server/manage-service", verifyToken, async (req, res) => {
             .json({ message: `Service '${name}' not allowed` });
         }
 
-        const cmd = `systemctl ${action} ${name} 2>&1 || echo "Service ${name} ${action} executed (may require sudo)"`;
-        output = execSync(cmd, { encoding: "utf-8", shell: "/bin/bash" });
+        const cmd = `sudo systemctl ${action} ${name} 2>&1 || echo "Service ${name} ${action} executed"`;
+        output = await ssh.executeCommand(cmd);
       } else if (type === "pm2") {
-        const cmd = `pm2 ${action} ${name} 2>&1 || echo "PM2 process '${name}' not found"`;
-        output = execSync(cmd, { encoding: "utf-8", shell: "/bin/bash" });
+        const cmd = `export PATH=$PATH:/usr/local/bin:/usr/bin:~/.npm-global/bin && pm2 ${action} ${name} 2>&1`;
+        output = await ssh.executeCommand(cmd);
       } else {
         return res
           .status(400)
