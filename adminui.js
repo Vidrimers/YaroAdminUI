@@ -1224,13 +1224,18 @@ app.get("/api/server/processes/screen", verifyToken, async (req, res) => {
       const sessions = [];
 
       lines.forEach((line) => {
-        // Match lines like "	1234.session1	(Detached)"
+        // Match lines like "	1234.session1	(Detached)" or "	1234.session1	(Attached)"
         const match = line.match(/\t(\d+)\.([^\s]+)\s+\(([^)]+)\)/);
         if (match) {
+          const statusText = match[3];
+          const isAttached = statusText.toLowerCase().includes('attached');
+          
           sessions.push({
             pid: match[1],
             name: match[2],
-            status: match[3],
+            status: 'running', // All listed sessions are running
+            isAttached: isAttached,
+            statusText: statusText,
             fullName: `${match[1]}.${match[2]}`,
           });
         }
@@ -1260,6 +1265,82 @@ app.get("/api/server/processes/screen", verifyToken, async (req, res) => {
       success: false,
       message: err.message,
       sessions: [],
+    });
+  }
+});
+
+// Manage screen sessions endpoint
+app.post("/api/server/screen/manage", verifyToken, async (req, res) => {
+  try {
+    const ssh = new SSHHelper(SERVER_IP);
+    const { sessionName, action } = req.body;
+
+    if (!sessionName || !action) {
+      return res.status(400).json({
+        success: false,
+        message: "sessionName and action required",
+      });
+    }
+
+    const allowedActions = ["stop", "restart", "attach"];
+    if (!allowedActions.includes(action)) {
+      return res.status(400).json({
+        success: false,
+        message: "Action must be: stop, restart, or attach",
+      });
+    }
+
+    let output = "";
+    let command = "";
+
+    try {
+      switch (action) {
+        case "stop":
+          // Kill the screen session
+          command = `screen -S ${sessionName} -X quit`;
+          output = await ssh.executeCommand(command);
+          break;
+
+        case "restart":
+          // This is tricky - we can't really restart a screen session
+          // We can only kill and suggest manual restart
+          command = `screen -S ${sessionName} -X quit`;
+          output = await ssh.executeCommand(command);
+          output += "\n\nScreen session stopped. Please start it manually with: screen -dmS <name> <command>";
+          break;
+
+        case "attach":
+          // Can't attach via SSH, but we can send a message
+          output = `To attach to this session, run: screen -r ${sessionName}`;
+          break;
+
+        default:
+          output = "Unknown action";
+      }
+
+      // Log the action
+      await db.addActivityLog(
+        req.user.username,
+        `Screen session '${sessionName}' action: ${action}`,
+        "screen"
+      );
+
+      res.json({
+        success: true,
+        sessionName,
+        action,
+        output: output.trim() || `Screen session ${action} executed`,
+      });
+    } catch (error) {
+      res.json({
+        success: false,
+        output: error.message,
+      });
+    }
+  } catch (err) {
+    res.status(500).json({
+      success: false,
+      message: err.message,
     });
   }
 });
