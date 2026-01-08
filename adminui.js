@@ -1507,10 +1507,13 @@ app.post("/api/server/terminal", verifyToken, async (req, res) => {
         finalCommand = `${command} && pwd`;
       }
       
+      // Load user profile to get PATH and aliases
+      const commandWithProfile = `source ~/.bashrc 2>/dev/null || source ~/.profile 2>/dev/null; ${finalCommand}`;
+      
       // Wrap in bash -c to support built-in commands like cd
       const commandWithTimeout = `timeout ${Math.floor(
         timeout / 1000
-      )} bash -c ${JSON.stringify(finalCommand)}`;
+      )} bash -c ${JSON.stringify(commandWithProfile)}`;
 
       let output = await ssh.executeCommand(commandWithTimeout);
 
