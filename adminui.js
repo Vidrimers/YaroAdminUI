@@ -1647,10 +1647,11 @@ app.post("/api/server/terminal", verifyToken, async (req, res) => {
         finalCommand = `${command} && pwd`;
       }
       
-      // Use login shell to load user's full environment including PATH
+      // Set TERM, add user's custom PATH and source bashrc
+      const customPaths = '/home/1xBetLineBoom:/home/adminui:/home/afkbot';
       const commandWithTimeout = `timeout ${Math.floor(
         timeout / 1000
-      )} bash -l -c ${JSON.stringify(finalCommand)}`;
+      )} bash -c 'export TERM=xterm; export PATH="$PATH:${customPaths}"; [ -f ~/.bashrc ] && source ~/.bashrc 2>/dev/null || true; ${finalCommand.replace(/'/g, "'\\''")}'`;
 
       let output = await ssh.executeCommand(commandWithTimeout);
 
