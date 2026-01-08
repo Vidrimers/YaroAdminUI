@@ -230,6 +230,10 @@ textarea.form-control {
   box-shadow: 0 5px 15px rgba(255, 152, 0, 0.3);
 }
 
+#favoriteCommandsBtn{
+  background: #2196f3;
+}
+
 .btn-info {
   background: #2196f3;
   color: white;
