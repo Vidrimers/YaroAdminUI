@@ -497,6 +497,14 @@
         <div class="card">
           <div class="card-header">
             <h2>💻 Терминал</h2>
+            <button
+              id="favoriteCommandsBtn"
+              class="btn btn-sm btn-warning"
+              style="margin-left: auto"
+              title="Избранные команды"
+            >
+              ❗
+            </button>
           </div>
           <div class="card-body">
             <div
@@ -722,6 +730,46 @@
         </div>
         <div class="modal-footer">
           <button id="closeSshKeysModalBtn" class="btn btn-secondary">Закрыть</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- FAVORITE COMMANDS MODAL -->
+    <div id="favoriteCommandsModal" class="modal" style="display: none">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2>❗ Избранные команды</h2>
+          <button id="closeFavoriteCommandsModal" class="modal-close">&times;</button>
+        </div>
+        <div class="modal-body">
+          <div style="margin-bottom: 15px;">
+            <h3 style="margin-bottom: 10px; font-size: 1em;">Добавить команду</h3>
+            <div style="display: flex; gap: 8px; margin-bottom: 10px;">
+              <input
+                type="text"
+                id="newCommandName"
+                placeholder="Название команды"
+                style="flex: 1; padding: 8px; border: 1px solid #ddd; border-radius: 4px;"
+              />
+            </div>
+            <div style="display: flex; gap: 8px;">
+              <input
+                type="text"
+                id="newCommandText"
+                placeholder="Команда (например: ls -la)"
+                style="flex: 1; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-family: 'Courier New', monospace;"
+              />
+              <button id="addFavoriteCommandBtn" class="btn btn-success">Добавить</button>
+            </div>
+          </div>
+          <hr style="margin: 15px 0; border: none; border-top: 1px solid #ddd;">
+          <h3 style="margin-bottom: 10px; font-size: 1em;">Сохраненные команды</h3>
+          <div id="favoriteCommandsList" style="max-height: 300px; overflow-y: auto;">
+            <p class="text-muted">Нет сохраненных команд</p>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button id="closeFavoriteCommandsModalBtn" class="btn btn-secondary">Закрыть</button>
         </div>
       </div>
     </div>

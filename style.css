@@ -1595,3 +1595,45 @@ body.theme-cyberpunk .card-header h2 {
 .terminal-output::-webkit-scrollbar-thumb:hover {
   background: #777;
 }
+
+/* ==================== FAVORITE COMMANDS ==================== */
+.favorite-command-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  margin-bottom: 8px;
+  background: #f5f5f5;
+  border-radius: 4px;
+  border: 1px solid #ddd;
+}
+
+.favorite-command-item:hover {
+  background: #e8e8e8;
+}
+
+.favorite-command-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.favorite-command-name {
+  font-weight: 500;
+  margin-bottom: 4px;
+  color: #333;
+}
+
+.favorite-command-text {
+  font-family: 'Courier New', monospace;
+  font-size: 0.9em;
+  color: #666;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.favorite-command-actions {
+  display: flex;
+  gap: 5px;
+  flex-shrink: 0;
+}

@@ -1755,15 +1755,20 @@ class UIController {
 
     if (!input || !execBtn) return;
 
-    const executeCommand = async () => {
-      const command = input.value.trim();
-      if (!command) return;
+    const executeCommand = async (command = null) => {
+      const cmd = command || input.value.trim();
+      if (!cmd) return;
+
+      // If command was passed, set it in input
+      if (command) {
+        input.value = command;
+      }
 
       // Add command to output
       const cmdLine = document.createElement("p");
       cmdLine.style.margin = "5px 0";
       cmdLine.style.color = "#4ec9b0";
-      cmdLine.textContent = `$ ${command}`;
+      cmdLine.textContent = `$ ${cmd}`;
       output.appendChild(cmdLine);
 
       // Disable button during execution
@@ -1778,7 +1783,7 @@ class UIController {
             "Content-Type": "application/json",
             Authorization: `Bearer ${this.auth.token}`,
           },
-          body: JSON.stringify({ command }),
+          body: JSON.stringify({ command: cmd }),
         });
 
         const data = await response.json();
@@ -1812,12 +1817,149 @@ class UIController {
     };
 
     // Execute on button click
-    execBtn.addEventListener("click", executeCommand);
+    execBtn.addEventListener("click", () => executeCommand());
 
     // Execute on Enter key
     input.addEventListener("keypress", (e) => {
       if (e.key === "Enter") {
         executeCommand();
+      }
+    });
+
+    // Setup favorite commands
+    this.setupFavoriteCommands(executeCommand);
+  }
+
+  setupFavoriteCommands(executeCommand) {
+    const modal = document.getElementById("favoriteCommandsModal");
+    const openBtn = document.getElementById("favoriteCommandsBtn");
+    const closeBtn = document.getElementById("closeFavoriteCommandsModal");
+    const closeModalBtn = document.getElementById("closeFavoriteCommandsModalBtn");
+    const addBtn = document.getElementById("addFavoriteCommandBtn");
+    const nameInput = document.getElementById("newCommandName");
+    const textInput = document.getElementById("newCommandText");
+    const commandsList = document.getElementById("favoriteCommandsList");
+
+    if (!modal || !openBtn) return;
+
+    let editingIndex = null;
+
+    // Load favorite commands from localStorage
+    const loadFavoriteCommands = () => {
+      const commands = JSON.parse(localStorage.getItem("favoriteCommands") || "[]");
+      
+      if (commands.length === 0) {
+        commandsList.innerHTML = '<p class="text-muted">Нет сохраненных команд</p>';
+        return;
+      }
+
+      commandsList.innerHTML = "";
+      commands.forEach((cmd, index) => {
+        const item = document.createElement("div");
+        item.className = "favorite-command-item";
+        item.innerHTML = `
+          <div class="favorite-command-info">
+            <div class="favorite-command-name">${cmd.name}</div>
+            <div class="favorite-command-text">${cmd.command}</div>
+          </div>
+          <div class="favorite-command-actions">
+            <button class="btn btn-sm btn-success" data-cmd-index="${index}" data-cmd-action="execute" title="Выполнить">▶</button>
+            <button class="btn btn-sm btn-primary" data-cmd-index="${index}" data-cmd-action="edit" title="Редактировать">✏️</button>
+            <button class="btn btn-sm btn-danger" data-cmd-index="${index}" data-cmd-action="delete" title="Удалить">🗑️</button>
+          </div>
+        `;
+        commandsList.appendChild(item);
+      });
+
+      // Setup action buttons
+      commandsList.querySelectorAll("[data-cmd-action]").forEach(btn => {
+        btn.addEventListener("click", () => {
+          const index = parseInt(btn.getAttribute("data-cmd-index"));
+          const action = btn.getAttribute("data-cmd-action");
+          const commands = JSON.parse(localStorage.getItem("favoriteCommands") || "[]");
+
+          if (action === "execute") {
+            modal.style.display = "none";
+            executeCommand(commands[index].command);
+          } else if (action === "edit") {
+            // Load command into inputs for editing
+            editingIndex = index;
+            nameInput.value = commands[index].name;
+            textInput.value = commands[index].command;
+            addBtn.textContent = "Сохранить";
+            addBtn.className = "btn btn-primary";
+            nameInput.focus();
+          } else if (action === "delete") {
+            if (confirm(`Удалить команду "${commands[index].name}"?`)) {
+              commands.splice(index, 1);
+              localStorage.setItem("favoriteCommands", JSON.stringify(commands));
+              loadFavoriteCommands();
+              this.toast.success("Команда удалена");
+            }
+          }
+        });
+      });
+    };
+
+    // Open modal
+    openBtn.addEventListener("click", () => {
+      modal.style.display = "flex";
+      loadFavoriteCommands();
+    });
+
+    // Close modal
+    const closeModal = () => {
+      modal.style.display = "none";
+      nameInput.value = "";
+      textInput.value = "";
+      editingIndex = null;
+      addBtn.textContent = "Добавить";
+      addBtn.className = "btn btn-success";
+    };
+
+    closeBtn.addEventListener("click", closeModal);
+    closeModalBtn.addEventListener("click", closeModal);
+
+    modal.addEventListener("click", (e) => {
+      if (e.target === modal) closeModal();
+    });
+
+    // Add or update command
+    addBtn.addEventListener("click", () => {
+      const name = nameInput.value.trim();
+      const command = textInput.value.trim();
+
+      if (!name || !command) {
+        this.toast.error("Заполните название и команду");
+        return;
+      }
+
+      const commands = JSON.parse(localStorage.getItem("favoriteCommands") || "[]");
+      
+      if (editingIndex !== null) {
+        // Update existing command
+        commands[editingIndex] = { name, command };
+        this.toast.success("Команда обновлена");
+        editingIndex = null;
+        addBtn.textContent = "Добавить";
+        addBtn.className = "btn btn-success";
+      } else {
+        // Add new command
+        commands.push({ name, command });
+        this.toast.success("Команда добавлена");
+      }
+
+      localStorage.setItem("favoriteCommands", JSON.stringify(commands));
+
+      nameInput.value = "";
+      textInput.value = "";
+      loadFavoriteCommands();
+    });
+
+    // Add on Enter in text input
+    textInput.addEventListener("keypress", (e) => {
+      if (e.key === "Enter") {
+        addBtn.click();
       }
     });
   }
