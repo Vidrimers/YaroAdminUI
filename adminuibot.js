@@ -27,6 +27,64 @@ class DB {
   close() {
     return new Promise((resolve) => this.db.close(resolve));
   }
+  getFavoriteCommands(username) {
+    return new Promise((resolve, reject) => {
+      this.db.all(
+        "SELECT id, name, command, order_position FROM favorite_commands WHERE username = ? ORDER BY order_position ASC, created_at DESC",
+        [username],
+        (err, rows) => {
+          err ? reject(err) : resolve(rows || []);
+        }
+      );
+    });
+  }
+}
+
+class SSHHelper {
+  constructor(host) {
+    this.host = host;
+    this.username = process.env.SSH_USERNAME || "root";
+    this.password = process.env.SSH_PASSWORD;
+  }
+
+  executeCommand(command) {
+    return new Promise((resolve, reject) => {
+      const conn = new SSHClient();
+      let output = "";
+
+      conn
+        .on("ready", () => {
+          conn.exec(command, (err, stream) => {
+            if (err) {
+              conn.end();
+              return reject(err);
+            }
+
+            stream
+              .on("close", () => {
+                conn.end();
+                resolve(output);
+              })
+              .on("data", (data) => {
+                output += data.toString();
+              })
+              .stderr.on("data", (data) => {
+                output += data.toString();
+              });
+          });
+        })
+        .on("error", (err) => {
+          reject(err);
+        })
+        .connect({
+          host: this.host,
+          port: 22,
+          username: this.username,
+          password: this.password,
+          readyTimeout: 10000,
+        });
+    });
+  }
 }
 
 const bot = new TelegramBot(TELEGRAM_BOT_TOKEN, { polling: true });
@@ -170,7 +228,8 @@ function getMainKeyboard() {
       [{ text: '🔑 Получить код' }, { text: '📊 Статус сервера' }],
       [{ text: '⚙️ Процессы' }, { text: '🔥 Firewall' }],
       [{ text: '🚀 PM2' }, { text: '📺 Screen' }],
-      [{ text: '💾 Диск' }, { text: '❓ Помощь' }]
+      [{ text: '💾 Диск' }, { text: '⚡ Команды' }],
+      [{ text: '❓ Помощь' }]
     ],
     resize_keyboard: true,
     one_time_keyboard: false
@@ -952,6 +1011,59 @@ bot.on("message", async (msg) => {
         }
         return;
       }
+    } else if (text === "⚡ Команды" || text === "/commands") {
+      if (!isAdmin(userId)) {
+        bot.sendMessage(chatId, `❌ Доступ запрещен! Только для администратора.`);
+        return;
+      }
+
+      try {
+        // Get favorite commands from database
+        const commands = await db.getFavoriteCommands('admin'); // Assuming admin username
+        
+        if (!commands || commands.length === 0) {
+          bot.sendMessage(
+            chatId,
+            `📝 У вас пока нет сохраненных команд.\n\n` +
+            `Добавьте команды через админ-панель в разделе "💻 Терминал" → кнопка "❗"`,
+            { reply_markup: getMainKeyboard() }
+          );
+          return;
+        }
+
+        // Create inline keyboard with commands (max 2 per row)
+        const keyboard = {
+          inline_keyboard: []
+        };
+
+        for (let i = 0; i < commands.length; i += 2) {
+          const row = [];
+          row.push({
+            text: commands[i].name,
+            callback_data: `cmd_${commands[i].id}`
+          });
+          if (i + 1 < commands.length) {
+            row.push({
+              text: commands[i + 1].name,
+              callback_data: `cmd_${commands[i + 1].id}`
+            });
+          }
+          keyboard.inline_keyboard.push(row);
+        }
+
+        bot.sendMessage(
+          chatId,
+          `⚡ Избранные команды:\n\n` +
+          `Выберите команду для выполнения:`,
+          { reply_markup: keyboard }
+        );
+      } catch (error) {
+        console.error('Error loading commands:', error);
+        bot.sendMessage(chatId, `❌ Ошибка загрузки команд: ${error.message}`, {
+          reply_markup: getMainKeyboard()
+        });
+      }
+      return;
     }
     
     // Неизвестная команда
@@ -1043,6 +1155,48 @@ bot.on('callback_query', async (query) => {
           `443/tcp                    ALLOW       Anywhere</code>`,
         { parse_mode: "HTML" }
       );
+    }
+  } else if (data.startsWith('cmd_')) {
+    // Execute favorite command
+    const commandId = data.replace('cmd_', '');
+    
+    try {
+      // Get command from database
+      const commands = await db.getFavoriteCommands('admin');
+      const command = commands.find(c => c.id === parseInt(commandId));
+      
+      if (!command) {
+        bot.sendMessage(chatId, `❌ Команда не найдена`);
+        return;
+      }
+
+      bot.sendMessage(chatId, `⚡ Выполняю команду: <b>${command.name}</b>\n\n<code>${command.command}</code>`, {
+        parse_mode: 'HTML'
+      });
+
+      // Execute command via SSH
+      const ssh = new SSHHelper(SERVER_IP);
+      const customPaths = '/home/1xBetLineBoom:/home/adminui:/home/afkbot';
+      const fullCommand = `export TERM=xterm; export PATH="$PATH:${customPaths}"; [ -f ~/.bashrc ] && source ~/.bashrc 2>/dev/null || true; ${command.command}`;
+      
+      const output = await ssh.executeCommand(fullCommand);
+      
+      // Send output (limit to 4000 chars for Telegram)
+      const truncatedOutput = output.length > 4000 ? output.substring(0, 4000) + '\n\n... (вывод обрезан)' : output;
+      
+      bot.sendMessage(
+        chatId,
+        `✅ Результат выполнения:\n\n<pre>${truncatedOutput || 'Команда выполнена успешно (нет вывода)'}</pre>`,
+        { 
+          parse_mode: 'HTML',
+          reply_markup: getMainKeyboard()
+        }
+      );
+    } catch (error) {
+      console.error('Error executing command:', error);
+      bot.sendMessage(chatId, `❌ Ошибка выполнения: ${error.message}`, {
+        reply_markup: getMainKeyboard()
+      });
     }
   }
 });
