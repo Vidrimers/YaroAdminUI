@@ -49,6 +49,24 @@ class DB {
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY(username) REFERENCES users(username)
     )`);
+    this.db.run(`CREATE TABLE IF NOT EXISTS favorite_commands (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      username TEXT NOT NULL,
+      name TEXT NOT NULL,
+      command TEXT NOT NULL,
+      order_position INTEGER DEFAULT 0,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY(username) REFERENCES users(username)
+    )`);
+    // Add order_position column if it doesn't exist (migration)
+    this.db.run(
+      `ALTER TABLE favorite_commands ADD COLUMN order_position INTEGER DEFAULT 0`,
+      (err) => {
+        if (err && !err.message.includes("duplicate column name")) {
+          console.warn("Migration warning:", err.message);
+        }
+      }
+    );
   }
   getUser(username) {
     return new Promise((resolve, reject) => {
@@ -116,6 +134,128 @@ class DB {
         [username, JSON.stringify(cardLayouts), JSON.stringify(cardHeights)],
         function (err) {
           err ? reject(err) : resolve({ id: this.lastID });
+        }
+      );
+    });
+  }
+
+  getFavoriteCommands(username) {
+    return new Promise((resolve, reject) => {
+      this.db.all(
+        "SELECT id, name, command, order_position FROM favorite_commands WHERE username = ? ORDER BY order_position ASC, created_at DESC",
+        [username],
+        (err, rows) => {
+          err ? reject(err) : resolve(rows || []);
+        }
+      );
+    });
+  }
+
+  addFavoriteCommand(username, name, command) {
+    return new Promise((resolve, reject) => {
+      // Get max order_position and add 1
+      this.db.get(
+        "SELECT MAX(order_position) as max_pos FROM favorite_commands WHERE username = ?",
+        [username],
+        (err, row) => {
+          if (err) {
+            reject(err);
+            return;
+          }
+          const nextPosition = (row && row.max_pos !== null) ? row.max_pos + 1 : 0;
+          this.db.run(
+            "INSERT INTO favorite_commands (username, name, command, order_position) VALUES (?, ?, ?, ?)",
+            [username, name, command, nextPosition],
+            function (err) {
+              err ? reject(err) : resolve({ id: this.lastID });
+            }
+          );
+        }
+      );
+    });
+  }
+
+  updateFavoriteCommand(id, username, name, command) {
+    return new Promise((resolve, reject) => {
+      this.db.run(
+        "UPDATE favorite_commands SET name = ?, command = ? WHERE id = ? AND username = ?",
+        [name, command, id, username],
+        function (err) {
+          err ? reject(err) : resolve({ changes: this.changes });
+        }
+      );
+    });
+  }
+
+  deleteFavoriteCommand(id, username) {
+    return new Promise((resolve, reject) => {
+      this.db.run(
+        "DELETE FROM favorite_commands WHERE id = ? AND username = ?",
+        [id, username],
+        function (err) {
+          err ? reject(err) : resolve({ changes: this.changes });
+        }
+      );
+    });
+  }
+
+  moveFavoriteCommand(id, username, direction) {
+    return new Promise((resolve, reject) => {
+      // Get all commands for user ordered by position
+      this.db.all(
+        "SELECT id, order_position FROM favorite_commands WHERE username = ? ORDER BY order_position ASC, created_at DESC",
+        [username],
+        (err, rows) => {
+          if (err) {
+            reject(err);
+            return;
+          }
+
+          const currentIndex = rows.findIndex(r => r.id === parseInt(id));
+          if (currentIndex === -1) {
+            reject(new Error("Command not found"));
+            return;
+          }
+
+          let targetIndex;
+          if (direction === "up") {
+            targetIndex = currentIndex - 1;
+          } else if (direction === "down") {
+            targetIndex = currentIndex + 1;
+          } else {
+            reject(new Error("Invalid direction"));
+            return;
+          }
+
+          // Check bounds
+          if (targetIndex < 0 || targetIndex >= rows.length) {
+            resolve({ changes: 0 }); // No change needed
+            return;
+          }
+
+          // Swap positions
+          const currentId = rows[currentIndex].id;
+          const targetId = rows[targetIndex].id;
+          const currentPos = rows[currentIndex].order_position;
+          const targetPos = rows[targetIndex].order_position;
+
+          this.db.run(
+            "UPDATE favorite_commands SET order_position = ? WHERE id = ?",
+            [targetPos, currentId],
+            (err) => {
+              if (err) {
+                reject(err);
+                return;
+              }
+              this.db.run(
+                "UPDATE favorite_commands SET order_position = ? WHERE id = ?",
+                [currentPos, targetId],
+                (err) => {
+                  err ? reject(err) : resolve({ changes: 2 });
+                }
+              );
+            }
+          );
         }
       );
     });
@@ -1507,13 +1647,10 @@ app.post("/api/server/terminal", verifyToken, async (req, res) => {
         finalCommand = `${command} && pwd`;
       }
       
-      // Load user profile to get PATH and aliases
-      const commandWithProfile = `source ~/.bashrc 2>/dev/null || source ~/.profile 2>/dev/null; ${finalCommand}`;
-      
-      // Wrap in bash -c to support built-in commands like cd
+      // Use login shell to load user's full environment including PATH
       const commandWithTimeout = `timeout ${Math.floor(
         timeout / 1000
-      )} bash -c ${JSON.stringify(commandWithProfile)}`;
+      )} bash -l -c ${JSON.stringify(finalCommand)}`;
 
       let output = await ssh.executeCommand(commandWithTimeout);
 
@@ -1762,8 +1899,69 @@ app.post("/api/user/settings", verifyToken, async (req, res) => {
   }
 });
 
+// Favorite commands endpoints
+app.get("/api/favorite-commands", verifyToken, async (req, res) => {
+  try {
+    const commands = await db.getFavoriteCommands(req.user.username);
+    res.json({ success: true, commands });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+app.post("/api/favorite-commands", verifyToken, async (req, res) => {
+  try {
+    const { name, command } = req.body;
+    if (!name || !command) {
+      return res.status(400).json({ success: false, message: "Name and command required" });
+    }
+    const result = await db.addFavoriteCommand(req.user.username, name, command);
+    res.json({ success: true, id: result.id });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+app.put("/api/favorite-commands/:id", verifyToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, command } = req.body;
+    if (!name || !command) {
+      return res.status(400).json({ success: false, message: "Name and command required" });
+    }
+    const result = await db.updateFavoriteCommand(id, req.user.username, name, command);
+    res.json({ success: true, changes: result.changes });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+app.delete("/api/favorite-commands/:id", verifyToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const result = await db.deleteFavoriteCommand(id, req.user.username);
+    res.json({ success: true, changes: result.changes });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+app.post("/api/favorite-commands/:id/move", verifyToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { direction } = req.body;
+    if (!direction || !["up", "down"].includes(direction)) {
+      return res.status(400).json({ success: false, message: "Invalid direction" });
+    }
+    const result = await db.moveFavoriteCommand(id, req.user.username, direction);
+    res.json({ success: true, changes: result.changes });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
 const server = app.listen(PORT, HOST, () => {
-  console.log(`\n��� YaroAdminUI Server Started on http://${HOST}:${PORT}\n`);
+  console.log(`\n🚀 YaroAdminUI Server Started on http://${HOST}:${PORT}\n`);
 });
 
 process.on("SIGTERM", async () => {
