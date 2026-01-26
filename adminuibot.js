@@ -1466,17 +1466,23 @@ bot.on('callback_query', async (query) => {
       
       // Get process info to find working directory
       const processInfo = await executeSSHCommand(
-        `export PATH=$PATH:/usr/local/bin:/usr/bin:~/.npm-global/bin:~/.nvm/versions/node/*/bin && pm2 jlist 2>/dev/null | grep -A 20 '"name":"${processName}"' | head -30`
+        `export PATH=$PATH:/usr/local/bin:/usr/bin:~/.npm-global/bin:~/.nvm/versions/node/*/bin && pm2 jlist 2>/dev/null`
       );
       
-      // Try to extract working directory from pm_cwd
+      // Parse JSON and find exact process match
       let workDir = '';
-      const cwdMatch = processInfo.match(/"pm_cwd":"([^"]+)"/);
-      if (cwdMatch) {
-        workDir = cwdMatch[1];
+      try {
+        const processes = JSON.parse(processInfo);
+        const targetProcess = processes.find(p => p.name === processName);
+        
+        if (targetProcess && targetProcess.pm2_env && targetProcess.pm2_env.pm_cwd) {
+          workDir = targetProcess.pm2_env.pm_cwd;
+        }
+      } catch (e) {
+        console.error('Failed to parse PM2 JSON:', e);
       }
       
-      // Common project directories mapping
+      // Common project directories mapping (fallback)
       const projectDirs = {
         'adminui': '/home/adminui',
         'adminuibot': '/home/adminui',
