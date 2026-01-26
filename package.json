@@ -7,6 +7,7 @@
   "scripts": {
     "start": "node adminui.js",
     "dev": "concurrently \"node adminui.js\" \"node adminuibot.js\"",
+    "dev:bot": "node dev-start.js",
     "bot": "node adminuibot.js",
     "both": "concurrently \"node adminui.js\" \"node adminuibot.js\""
   },

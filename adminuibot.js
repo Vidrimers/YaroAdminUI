@@ -87,11 +87,48 @@ class SSHHelper {
   }
 }
 
-const bot = new TelegramBot(TELEGRAM_BOT_TOKEN, { polling: true });
-const db = new DB(DB_PATH);
+// Development mode check
+const IS_DEV = process.env.NODE_ENV === 'development' || process.env.DEV_MODE === 'true';
+
+let bot, db;
+
+// Initialize bot
+async function initBot() {
+  // If in dev mode, stop production bot on server
+  if (IS_DEV && SERVER_IP && SERVER_IP !== 'localhost') {
+    console.log('[DEV MODE] Stopping production bot on server...');
+    const ssh = new SSHHelper(SERVER_IP);
+    try {
+      await ssh.executeCommand('pm2 stop adminuibot 2>/dev/null || true');
+      console.log('[DEV MODE] Production bot stopped');
+    } catch (err) {
+      console.log('[DEV MODE] Could not stop production bot:', err.message);
+    }
+    // Wait a bit for Telegram to release the connection
+    await new Promise(resolve => setTimeout(resolve, 2000));
+  }
+
+  bot = new TelegramBot(TELEGRAM_BOT_TOKEN, { polling: true });
+  db = new DB(DB_PATH);
+  
+  setupBotHandlers();
+}
+
+function setupBotHandlers() {
 
 // User states for interactive commands
 const userStates = new Map();
+
+// Функция для экранирования HTML символов
+function escapeHtml(text) {
+  if (!text) return '';
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
 
 // Функция для выполнения SSH команд
 function executeSSHCommand(command) {
@@ -471,8 +508,33 @@ bot.on("message", async (msg) => {
           response += `   Uptime: ${uptime} мин | Restarts: ${p.pm2_env.restart_time || 0}\n\n`;
         });
         
-        response += `🔗 <a href="${ADMIN_UI_URL}">Открыть в админ-панели</a>`;
-        bot.sendMessage(chatId, response, { parse_mode: "HTML" });
+        response += `\nВыберите действие:`;
+        
+        // Create inline keyboard with PM2 actions
+        const keyboard = {
+          inline_keyboard: [
+            [
+              { text: '📋 Просмотреть логи', callback_data: 'pm2_logs' },
+              { text: '🔄 Перезапустить', callback_data: 'pm2_restart' }
+            ],
+            [
+              { text: '⏹️ Остановить', callback_data: 'pm2_stop' },
+              { text: '▶️ Запустить', callback_data: 'pm2_start' }
+            ],
+            [
+              { text: '🔄 Pull & Run', callback_data: 'pm2_pull_run' }
+            ],
+            [
+              { text: '🔗 Открыть админ-панель', url: ADMIN_UI_URL }
+            ]
+          ]
+        };
+        
+        bot.sendMessage(chatId, response, { 
+          parse_mode: "HTML",
+          reply_markup: keyboard
+        });
+
         
       } catch (sshError) {
         console.error('PM2 Error:', sshError);
@@ -1010,6 +1072,46 @@ bot.on("message", async (msg) => {
           });
         }
         return;
+      } else if (userState.action === 'pm2_logs_custom_lines') {
+        const lines = text.trim();
+        const processName = userState.processName;
+        
+        if (!lines.match(/^\d+$/)) {
+          bot.sendMessage(chatId, "❌ Неверный формат. Введите только число (например: 75)", {
+            reply_markup: getMainKeyboard()
+          });
+          userStates.delete(userId);
+          return;
+        }
+        
+        userStates.delete(userId);
+        
+        try {
+          bot.sendMessage(chatId, `⏳ Загружаю логи процесса ${processName} (${lines} строк)...`);
+          
+          const output = await executeSSHCommand(
+            `export PATH=$PATH:/usr/local/bin:/usr/bin:~/.npm-global/bin:~/.nvm/versions/node/*/bin && pm2 logs ${processName} --lines ${lines} --nostream 2>&1 || echo "Ошибка получения логов"`
+          );
+          
+          // Truncate output if too long for Telegram (max 4096 chars)
+          const truncatedOutput = output.length > 4000 
+            ? output.substring(0, 4000) + '\n\n... (вывод обрезан, используйте меньше строк)' 
+            : output;
+          
+          bot.sendMessage(
+            chatId,
+            `📋 <b>Логи процесса ${processName}</b> (последние ${lines} строк):\n\n<pre>${escapeHtml(truncatedOutput)}</pre>`,
+            { 
+              parse_mode: 'HTML',
+              reply_markup: getMainKeyboard()
+            }
+          );
+        } catch (error) {
+          bot.sendMessage(chatId, `❌ Ошибка получения логов: ${error.message}`, {
+            reply_markup: getMainKeyboard()
+          });
+        }
+        return;
       }
     } else if (text === "⚡ Команды" || text === "/commands") {
       if (!isAdmin(userId)) {
@@ -1156,6 +1258,450 @@ bot.on('callback_query', async (query) => {
         { parse_mode: "HTML" }
       );
     }
+  } else if (data === 'pm2_logs') {
+    // Show PM2 processes for log selection
+    try {
+      bot.sendMessage(chatId, "⏳ Загружаю список PM2 процессов...");
+      
+      const pm2Check = await executeSSHCommand(
+        `which pm2 || command -v pm2 || echo ""`
+      );
+      
+      if (!pm2Check.trim()) {
+        bot.sendMessage(chatId, "❌ PM2 не установлен на сервере");
+        return;
+      }
+
+      const output = await executeSSHCommand(
+        `export PATH=$PATH:/usr/local/bin:/usr/bin:~/.npm-global/bin:~/.nvm/versions/node/*/bin && pm2 jlist 2>/dev/null || echo "[]"`
+      );
+      
+      const processes = JSON.parse(output);
+      
+      if (processes.length === 0) {
+        bot.sendMessage(chatId, "📭 PM2 процессы не найдены");
+        return;
+      }
+
+      // Create inline keyboard with process names
+      const keyboard = {
+        inline_keyboard: []
+      };
+
+      processes.forEach((p) => {
+        keyboard.inline_keyboard.push([{
+          text: `${p.pm2_env.status === 'online' ? '✅' : '❌'} ${p.name} (ID: ${p.pm_id})`,
+          callback_data: `pm2_log_${p.name}`
+        }]);
+      });
+
+      bot.sendMessage(
+        chatId,
+        `📋 Выберите процесс для просмотра логов:`,
+        { reply_markup: keyboard }
+      );
+    } catch (error) {
+      bot.sendMessage(chatId, `❌ Ошибка: ${error.message}`);
+    }
+  } else if (data === 'pm2_restart') {
+    // Show PM2 processes for restart
+    try {
+      bot.sendMessage(chatId, "⏳ Загружаю список PM2 процессов...");
+      
+      const output = await executeSSHCommand(
+        `export PATH=$PATH:/usr/local/bin:/usr/bin:~/.npm-global/bin:~/.nvm/versions/node/*/bin && pm2 jlist 2>/dev/null || echo "[]"`
+      );
+      
+      const processes = JSON.parse(output);
+      
+      if (processes.length === 0) {
+        bot.sendMessage(chatId, "📭 PM2 процессы не найдены");
+        return;
+      }
+
+      const keyboard = {
+        inline_keyboard: []
+      };
+
+      processes.forEach((p) => {
+        keyboard.inline_keyboard.push([{
+          text: `${p.pm2_env.status === 'online' ? '✅' : '❌'} ${p.name} (ID: ${p.pm_id})`,
+          callback_data: `pm2_restart_${p.name}`
+        }]);
+      });
+      
+      keyboard.inline_keyboard.push([{
+        text: '🔄 Перезапустить все',
+        callback_data: 'pm2_restart_all'
+      }]);
+
+      bot.sendMessage(
+        chatId,
+        `🔄 Выберите процесс для перезапуска:`,
+        { reply_markup: keyboard }
+      );
+    } catch (error) {
+      bot.sendMessage(chatId, `❌ Ошибка: ${error.message}`);
+    }
+  } else if (data === 'pm2_pull_run') {
+    // Show PM2 processes for pull and run
+    try {
+      bot.sendMessage(chatId, "⏳ Загружаю список PM2 процессов...");
+      
+      const output = await executeSSHCommand(
+        `export PATH=$PATH:/usr/local/bin:/usr/bin:~/.npm-global/bin:~/.nvm/versions/node/*/bin && pm2 jlist 2>/dev/null || echo "[]"`
+      );
+      
+      const processes = JSON.parse(output);
+      
+      if (processes.length === 0) {
+        bot.sendMessage(chatId, "📭 PM2 процессы не найдены");
+        return;
+      }
+
+      const keyboard = {
+        inline_keyboard: []
+      };
+
+      processes.forEach((p) => {
+        keyboard.inline_keyboard.push([{
+          text: `${p.pm2_env.status === 'online' ? '✅' : '❌'} ${p.name} (ID: ${p.pm_id})`,
+          callback_data: `pm2_pullrun_${p.name}`
+        }]);
+      });
+
+      bot.sendMessage(
+        chatId,
+        `🔄 Выберите процесс для обновления и перезапуска:\n\n⚠️ Будет выполнено:\n1. git pull\n2. npm install (если нужно)\n3. pm2 restart`,
+        { reply_markup: keyboard }
+      );
+    } catch (error) {
+      bot.sendMessage(chatId, `❌ Ошибка: ${error.message}`);
+    }
+  } else if (data === 'pm2_stop') {
+    // Show PM2 processes for stop
+    try {
+      bot.sendMessage(chatId, "⏳ Загружаю список PM2 процессов...");
+      
+      const output = await executeSSHCommand(
+        `export PATH=$PATH:/usr/local/bin:/usr/bin:~/.npm-global/bin:~/.nvm/versions/node/*/bin && pm2 jlist 2>/dev/null || echo "[]"`
+      );
+      
+      const processes = JSON.parse(output);
+      
+      if (processes.length === 0) {
+        bot.sendMessage(chatId, "📭 PM2 процессы не найдены");
+        return;
+      }
+
+      const keyboard = {
+        inline_keyboard: []
+      };
+
+      processes.forEach((p) => {
+        keyboard.inline_keyboard.push([{
+          text: `${p.pm2_env.status === 'online' ? '✅' : '❌'} ${p.name} (ID: ${p.pm_id})`,
+          callback_data: `pm2_stop_${p.name}`
+        }]);
+      });
+      
+      keyboard.inline_keyboard.push([{
+        text: '⏹️ Остановить все',
+        callback_data: 'pm2_stop_all'
+      }]);
+
+      bot.sendMessage(
+        chatId,
+        `⏹️ Выберите процесс для остановки:`,
+        { reply_markup: keyboard }
+      );
+    } catch (error) {
+      bot.sendMessage(chatId, `❌ Ошибка: ${error.message}`);
+    }
+  } else if (data === 'pm2_start') {
+    // Show PM2 processes for start
+    try {
+      bot.sendMessage(chatId, "⏳ Загружаю список PM2 процессов...");
+      
+      const output = await executeSSHCommand(
+        `export PATH=$PATH:/usr/local/bin:/usr/bin:~/.npm-global/bin:~/.nvm/versions/node/*/bin && pm2 jlist 2>/dev/null || echo "[]"`
+      );
+      
+      const processes = JSON.parse(output);
+      
+      if (processes.length === 0) {
+        bot.sendMessage(chatId, "📭 PM2 процессы не найдены");
+        return;
+      }
+
+      const keyboard = {
+        inline_keyboard: []
+      };
+
+      processes.forEach((p) => {
+        keyboard.inline_keyboard.push([{
+          text: `${p.pm2_env.status === 'online' ? '✅' : '❌'} ${p.name} (ID: ${p.pm_id})`,
+          callback_data: `pm2_start_${p.name}`
+        }]);
+      });
+      
+      keyboard.inline_keyboard.push([{
+        text: '▶️ Запустить все',
+        callback_data: 'pm2_start_all'
+      }]);
+
+      bot.sendMessage(
+        chatId,
+        `▶️ Выберите процесс для запуска:`,
+        { reply_markup: keyboard }
+      );
+    } catch (error) {
+      bot.sendMessage(chatId, `❌ Ошибка: ${error.message}`);
+    }
+  } else if (data.startsWith('pm2_pullrun_')) {
+    const processName = data.replace('pm2_pullrun_', '');
+    
+    try {
+      bot.sendMessage(chatId, `🔄 Обновляю и перезапускаю процесс ${processName}...\n\n⏳ Шаг 1/3: Получаю информацию о процессе...`);
+      
+      // Get process info to find working directory
+      const processInfo = await executeSSHCommand(
+        `export PATH=$PATH:/usr/local/bin:/usr/bin:~/.npm-global/bin:~/.nvm/versions/node/*/bin && pm2 jlist 2>/dev/null | grep -A 20 '"name":"${processName}"' | head -30`
+      );
+      
+      // Try to extract working directory from pm_cwd
+      let workDir = '';
+      const cwdMatch = processInfo.match(/"pm_cwd":"([^"]+)"/);
+      if (cwdMatch) {
+        workDir = cwdMatch[1];
+      }
+      
+      // Common project directories mapping
+      const projectDirs = {
+        'adminui': '/home/adminui',
+        'adminuibot': '/home/adminui',
+        'afkbot': '/home/afkbot',
+        'vpn-api': '/home/vpn-api',
+        '1xBetLineBoom': '/home/1xBetLineBoom'
+      };
+      
+      // If we couldn't find working dir, try common locations
+      if (!workDir && projectDirs[processName]) {
+        workDir = projectDirs[processName];
+      }
+      
+      if (!workDir) {
+        bot.sendMessage(chatId, `❌ Не удалось определить рабочую директорию для процесса ${processName}`, {
+          reply_markup: getMainKeyboard()
+        });
+        return;
+      }
+      
+      bot.sendMessage(chatId, `⏳ Шаг 2/3: Обновляю код из репозитория...\nДиректория: ${workDir}`);
+      
+      // Execute git pull
+      const pullOutput = await executeSSHCommand(
+        `cd ${workDir} && git pull origin master 2>&1`
+      );
+      
+      bot.sendMessage(chatId, `📥 Git pull:\n<code>${escapeHtml(pullOutput.substring(0, 500))}</code>`, {
+        parse_mode: 'HTML'
+      });
+      
+      // Check if package.json changed (optional npm install)
+      if (pullOutput.includes('package.json') || pullOutput.includes('package-lock.json')) {
+        bot.sendMessage(chatId, `⏳ Обнаружены изменения в зависимостях, выполняю npm install...`);
+        const npmOutput = await executeSSHCommand(
+          `cd ${workDir} && npm install 2>&1`
+        );
+        bot.sendMessage(chatId, `📦 NPM install завершен`);
+      }
+      
+      bot.sendMessage(chatId, `⏳ Шаг 3/3: Перезапускаю процесс...`);
+      
+      // Restart process
+      await executeSSHCommand(
+        `export PATH=$PATH:/usr/local/bin:/usr/bin:~/.npm-global/bin:~/.nvm/versions/node/*/bin && pm2 restart ${processName}`
+      );
+      
+      bot.sendMessage(chatId, `✅ Процесс ${processName} успешно обновлен и перезапущен!`, {
+        reply_markup: getMainKeyboard()
+      });
+      
+    } catch (error) {
+      bot.sendMessage(chatId, `❌ Ошибка при обновлении: ${error.message}`, {
+        reply_markup: getMainKeyboard()
+      });
+    }
+  } else if (data.startsWith('pm2_restart_')) {
+    const processName = data.replace('pm2_restart_', '');
+    
+    try {
+      if (processName === 'all') {
+        bot.sendMessage(chatId, `🔄 Перезапускаю все PM2 процессы...`);
+        await executeSSHCommand(
+          `export PATH=$PATH:/usr/local/bin:/usr/bin:~/.npm-global/bin:~/.nvm/versions/node/*/bin && pm2 restart all`
+        );
+        bot.sendMessage(chatId, `✅ Все PM2 процессы перезапущены`, {
+          reply_markup: getMainKeyboard()
+        });
+      } else {
+        bot.sendMessage(chatId, `🔄 Перезапускаю процесс ${processName}...`);
+        await executeSSHCommand(
+          `export PATH=$PATH:/usr/local/bin:/usr/bin:~/.npm-global/bin:~/.nvm/versions/node/*/bin && pm2 restart ${processName}`
+        );
+        bot.sendMessage(chatId, `✅ Процесс ${processName} перезапущен`, {
+          reply_markup: getMainKeyboard()
+        });
+      }
+    } catch (error) {
+      bot.sendMessage(chatId, `❌ Ошибка перезапуска: ${error.message}`, {
+        reply_markup: getMainKeyboard()
+      });
+    }
+  } else if (data.startsWith('pm2_stop_')) {
+    const processName = data.replace('pm2_stop_', '');
+    
+    try {
+      if (processName === 'all') {
+        bot.sendMessage(chatId, `⏹️ Останавливаю все PM2 процессы...`);
+        await executeSSHCommand(
+          `export PATH=$PATH:/usr/local/bin:/usr/bin:~/.npm-global/bin:~/.nvm/versions/node/*/bin && pm2 stop all`
+        );
+        bot.sendMessage(chatId, `✅ Все PM2 процессы остановлены`, {
+          reply_markup: getMainKeyboard()
+        });
+      } else {
+        bot.sendMessage(chatId, `⏹️ Останавливаю процесс ${processName}...`);
+        await executeSSHCommand(
+          `export PATH=$PATH:/usr/local/bin:/usr/bin:~/.npm-global/bin:~/.nvm/versions/node/*/bin && pm2 stop ${processName}`
+        );
+        bot.sendMessage(chatId, `✅ Процесс ${processName} остановлен`, {
+          reply_markup: getMainKeyboard()
+        });
+      }
+    } catch (error) {
+      bot.sendMessage(chatId, `❌ Ошибка остановки: ${error.message}`, {
+        reply_markup: getMainKeyboard()
+      });
+    }
+  } else if (data.startsWith('pm2_start_')) {
+    const processName = data.replace('pm2_start_', '');
+    
+    try {
+      if (processName === 'all') {
+        bot.sendMessage(chatId, `▶️ Запускаю все PM2 процессы...`);
+        await executeSSHCommand(
+          `export PATH=$PATH:/usr/local/bin:/usr/bin:~/.npm-global/bin:~/.nvm/versions/node/*/bin && pm2 start all`
+        );
+        bot.sendMessage(chatId, `✅ Все PM2 процессы запущены`, {
+          reply_markup: getMainKeyboard()
+        });
+      } else {
+        bot.sendMessage(chatId, `▶️ Запускаю процесс ${processName}...`);
+        await executeSSHCommand(
+          `export PATH=$PATH:/usr/local/bin:/usr/bin:~/.npm-global/bin:~/.nvm/versions/node/*/bin && pm2 start ${processName}`
+        );
+        bot.sendMessage(chatId, `✅ Процесс ${processName} запущен`, {
+          reply_markup: getMainKeyboard()
+        });
+      }
+    } catch (error) {
+      bot.sendMessage(chatId, `❌ Ошибка запуска: ${error.message}`, {
+        reply_markup: getMainKeyboard()
+      });
+    }
+  } else if (data.startsWith('pm2_log_')) {
+    // Process selected, now ask for number of lines
+    const processName = data.replace('pm2_log_', '');
+    
+    // Store process name in user state
+    userStates.set(userId, { 
+      action: 'pm2_logs_lines',
+      processName: processName
+    });
+    
+    // Create inline keyboard with common line counts
+    const keyboard = {
+      inline_keyboard: [
+        [
+          { text: '10 строк', callback_data: `pm2_lines_${processName}_10` },
+          { text: '20 строк', callback_data: `pm2_lines_${processName}_20` }
+        ],
+        [
+          { text: '50 строк', callback_data: `pm2_lines_${processName}_50` },
+          { text: '100 строк', callback_data: `pm2_lines_${processName}_100` }
+        ],
+        [
+          { text: '200 строк', callback_data: `pm2_lines_${processName}_200` },
+          { text: '500 строк', callback_data: `pm2_lines_${processName}_500` }
+        ],
+        [
+          { text: '✏️ Ввести свое значение', callback_data: `pm2_lines_${processName}_custom` }
+        ]
+      ]
+    };
+    
+    bot.sendMessage(
+      chatId,
+      `📊 Процесс: <b>${processName}</b>\n\nВыберите количество строк для просмотра:`,
+      { 
+        parse_mode: 'HTML',
+        reply_markup: keyboard
+      }
+    );
+  } else if (data.startsWith('pm2_lines_')) {
+    // Extract process name and line count
+    const parts = data.replace('pm2_lines_', '').split('_');
+    const lineCount = parts.pop();
+    const processName = parts.join('_');
+    
+    if (lineCount === 'custom') {
+      // Ask user to input custom line count
+      userStates.set(userId, { 
+        action: 'pm2_logs_custom_lines',
+        processName: processName
+      });
+      
+      bot.sendMessage(
+        chatId,
+        `✏️ Введите количество строк для просмотра логов процесса <b>${processName}</b>:\n\nПример: 75`,
+        { 
+          parse_mode: 'HTML',
+          reply_markup: {
+            force_reply: true,
+            selective: true
+          }
+        }
+      );
+    } else {
+      // Show logs with specified line count
+      try {
+        bot.sendMessage(chatId, `⏳ Загружаю логи процесса ${processName} (${lineCount} строк)...`);
+        
+        const output = await executeSSHCommand(
+          `export PATH=$PATH:/usr/local/bin:/usr/bin:~/.npm-global/bin:~/.nvm/versions/node/*/bin && pm2 logs ${processName} --lines ${lineCount} --nostream 2>&1 || echo "Ошибка получения логов"`
+        );
+        
+        // Truncate output if too long for Telegram (max 4096 chars)
+        const truncatedOutput = output.length > 4000 
+          ? output.substring(0, 4000) + '\n\n... (вывод обрезан, используйте меньше строк)' 
+          : output;
+        
+        bot.sendMessage(
+          chatId,
+          `📋 <b>Логи процесса ${processName}</b> (последние ${lineCount} строк):\n\n<pre>${escapeHtml(truncatedOutput)}</pre>`,
+          { 
+            parse_mode: 'HTML',
+            reply_markup: getMainKeyboard()
+          }
+        );
+      } catch (error) {
+        bot.sendMessage(chatId, `❌ Ошибка получения логов: ${error.message}`, {
+          reply_markup: getMainKeyboard()
+        });
+      }
+    }
   } else if (data.startsWith('cmd_')) {
     // Execute favorite command
     const commandId = data.replace('cmd_', '');
@@ -1186,7 +1732,7 @@ bot.on('callback_query', async (query) => {
       
       bot.sendMessage(
         chatId,
-        `✅ Результат выполнения:\n\n<pre>${truncatedOutput || 'Команда выполнена успешно (нет вывода)'}</pre>`,
+        `✅ Результат выполнения:\n\n<pre>${escapeHtml(truncatedOutput) || 'Команда выполнена успешно (нет вывода)'}</pre>`,
         { 
           parse_mode: 'HTML',
           reply_markup: getMainKeyboard()
@@ -1200,8 +1746,15 @@ bot.on('callback_query', async (query) => {
     }
   }
 });
+}
 
-console.log("\n[YaroAdminUI] Telegram Bot Started\n");
+// Start bot
+initBot().then(() => {
+  console.log("\n[YaroAdminUI] Telegram Bot Started\n");
+}).catch(err => {
+  console.error("Failed to start bot:", err);
+  process.exit(1);
+});
 
 process.on("SIGTERM", async () => {
   console.log("Shutting down bot...");
