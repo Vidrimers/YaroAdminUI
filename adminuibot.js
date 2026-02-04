@@ -135,7 +135,11 @@ function executeSSHCommand(command) {
   return new Promise((resolve, reject) => {
     const conn = new SSHClient();
     
-    const sshKeyPath = process.env.SSH_KEY_PATH || `${os.homedir()}/.ssh/id_rsa`;
+    // Properly expand ~ in SSH_KEY_PATH
+    const sshKeyPath = (process.env.SSH_KEY_PATH || `${os.homedir()}/.ssh/id_rsa`).replace(
+      /^~/,
+      os.homedir()
+    );
     const sshPassword = process.env.SSH_PASSWORD;
     
     // Prepare connection config
@@ -145,12 +149,22 @@ function executeSSHCommand(command) {
       username: process.env.SSH_USERNAME || process.env.SSH_USER || 'root'
     };
     
-    // Use password if available, otherwise try key
+    // Try to use both password and key for authentication
     if (sshPassword) {
       connConfig.password = sshPassword;
-    } else if (fs.existsSync(sshKeyPath)) {
-      connConfig.privateKey = fs.readFileSync(sshKeyPath);
-    } else {
+    }
+    
+    // Also try to add private key if it exists
+    if (fs.existsSync(sshKeyPath)) {
+      try {
+        connConfig.privateKey = fs.readFileSync(sshKeyPath);
+      } catch (err) {
+        console.warn(`Failed to read SSH key: ${err.message}`);
+      }
+    }
+    
+    // Check if we have at least one authentication method
+    if (!connConfig.password && !connConfig.privateKey) {
       return reject(new Error(`SSH authentication failed: no password and key not found at ${sshKeyPath}`));
     }
     
@@ -178,6 +192,14 @@ function executeSSHCommand(command) {
         });
       });
     }).on('error', (err) => {
+      console.error('SSH Connection Error:', {
+        host: SERVER_IP,
+        username: connConfig.username,
+        hasPassword: !!connConfig.password,
+        hasPrivateKey: !!connConfig.privateKey,
+        keyPath: sshKeyPath,
+        error: err.message
+      });
       reject(err);
     }).connect(connConfig);
   });
