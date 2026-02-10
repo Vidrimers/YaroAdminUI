@@ -356,24 +356,63 @@ bot.on("message", async (msg) => {
         `⚠️ Код действует только 10 минут!`,
       { parse_mode: "HTML" }
     );
+  // ============ SERVER STATUS HANDLER ============
   } else if (text === "/status" || text === "📊 Статус сервера") {
     if (!isAdmin(userId)) {
       bot.sendMessage(chatId, `❌ Доступ запрещен! Только для администратора.`);
       return;
     }
     
-    bot.sendMessage(
-      chatId,
-      `🖥️ Статус сервера:\n\n` +
-        `✅ Сервер: Онлайн\n` +
-        `⏱️ Uptime: 45 дней\n` +
-        `🌐 IP адрес: ${SERVER_IP}\n` +
-        `🔗 URL: ${ADMIN_UI_URL}\n\n` +
-        `📊 Ресурсы:\n` +
-        `RAM: 45%\n` +
-        `CPU: 23%\n` +
-        `Диск: 67%`
-    );
+    try {
+      bot.sendMessage(chatId, "⏳ Загружаю статус сервера...");
+      
+      // Get uptime
+      const uptimeOutput = await executeSSHCommand('uptime -p 2>/dev/null || uptime');
+      const uptime = uptimeOutput.replace('up ', '').trim();
+      
+      // Get memory usage
+      const memOutput = await executeSSHCommand('free | grep Mem');
+      const memParts = memOutput.split(/\s+/);
+      const memTotal = parseInt(memParts[1]);
+      const memUsed = parseInt(memParts[2]);
+      const memPercent = ((memUsed / memTotal) * 100).toFixed(1);
+      
+      // Get CPU usage (average over 1 second)
+      const cpuOutput = await executeSSHCommand('top -bn1 | grep "Cpu(s)" | sed "s/.*, *\\([0-9.]*\\)%* id.*/\\1/" | awk \'{print 100 - $1}\'');
+      const cpuPercent = parseFloat(cpuOutput).toFixed(1);
+      
+      // Get disk usage
+      const diskOutput = await executeSSHCommand('df -h / | tail -1');
+      const diskParts = diskOutput.split(/\s+/);
+      const diskPercent = diskParts[4].replace('%', '');
+      
+      bot.sendMessage(
+        chatId,
+        `🖥️ <b>Статус сервера:</b>\n\n` +
+          `✅ Сервер: Онлайн\n` +
+          `⏱️ Uptime: ${uptime}\n` +
+          `🌐 IP адрес: ${SERVER_IP}\n` +
+          `🔗 URL: ${ADMIN_UI_URL}\n\n` +
+          `📊 <b>Ресурсы:</b>\n` +
+          `💾 RAM: ${memPercent}%\n` +
+          `⚡ CPU: ${cpuPercent}%\n` +
+          `💿 Диск: ${diskPercent}%`,
+        { parse_mode: "HTML" }
+      );
+    } catch (error) {
+      console.error('Status Error:', error);
+      bot.sendMessage(
+        chatId,
+        `🖥️ <b>Статус сервера:</b>\n\n` +
+          `✅ Сервер: Онлайн\n` +
+          `🌐 IP адрес: ${SERVER_IP}\n` +
+          `🔗 URL: ${ADMIN_UI_URL}\n\n` +
+          `⚠️ Не удалось получить детальную информацию о ресурсах`,
+        { parse_mode: "HTML" }
+      );
+    }
+  // ============ END SERVER STATUS HANDLER ============
+  
   } else if (text === "/help" || text === "❓ Помощь") {
     bot.sendMessage(
       chatId,
