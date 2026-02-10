@@ -298,9 +298,8 @@ function getMainKeyboard() {
     keyboard: [
       [{ text: '🔑 Получить код' }, { text: '📊 Статус сервера' }],
       [{ text: '⚙️ Процессы' }, { text: '🔥 Firewall' }],
-      [{ text: '🚀 PM2' }, { text: '📺 Screen' }],
-      [{ text: '💾 Диск' }, { text: '⚡ Команды' }],
-      [{ text: '❓ Помощь' }]
+      [{ text: '🚀 PM2' }, { text: '🔧 Другие процессы' }],
+      [{ text: '💾 Диск' }, { text: '❓ Помощь' }]
     ],
     resize_keyboard: true,
     one_time_keyboard: false
@@ -529,104 +528,37 @@ bot.on("message", async (msg) => {
       parse_mode: "HTML",
       reply_markup: keyboard
     });
-  } else if (text === "📺 Screen" || text === "/screen") {
+  // ============ ДРУГИЕ ПРОЦЕССЫ MENU ============
+  } else if (text === "🔧 Другие процессы" || text === "/other_processes") {
     if (!isAdmin(userId)) {
       bot.sendMessage(chatId, `❌ Доступ запрещен! Только для администратора.`);
       return;
     }
     
-    try {
-      bot.sendMessage(chatId, "⏳ Загружаю Screen сессии...");
-
-      try {
-        // First check if screen is installed
-        const screenCheck = await executeSSHCommand(
-          `which screen || command -v screen || echo ""`
-        );
-        
-        if (!screenCheck.trim()) {
-          bot.sendMessage(chatId, "❌ Screen не установлен на сервере\n\nУстановите: apt install screen");
-          return;
-        }
-
-        // Get screen sessions for current user
-        const output = await executeSSHCommand(
-          `screen -ls 2>&1`
-        );
-        
-        console.log('Screen output:', output);
-        
-        // Also try to get all users' screen sessions
-        let allUsersOutput = '';
-        try {
-          allUsersOutput = await executeSSHCommand(
-            `sudo ls -la /var/run/screen 2>/dev/null || ls -la /run/screen 2>/dev/null || echo ""`
-          );
-        } catch (e) {
-          console.log('Could not get all users screen sessions:', e.message);
-        }
-        
-        // Check various "no sessions" messages
-        if (output.includes("No Sockets found") || 
-            output.includes("No screen session") ||
-            output.includes("There is no screen to be") ||
-            output.trim() === "") {
-          
-          // Check if there are screen sessions from other users
-          if (allUsersOutput && allUsersOutput.includes('S-')) {
-            bot.sendMessage(chatId, 
-              `📭 Screen сессии текущего пользователя (${process.env.SSH_USERNAME || 'root'}) не найдены\n\n` +
-              `Но обнаружены сессии других пользователей:\n<code>${escapeHtml(allUsersOutput.substring(0, 500))}</code>\n\n` +
-              `Попробуйте: screen -ls от имени нужного пользователя`, 
-              { parse_mode: 'HTML' }
-            );
-          } else {
-            bot.sendMessage(chatId, "📭 Screen сессии не найдены\n\nТекущий пользователь: " + (process.env.SSH_USERNAME || 'root'));
-          }
-          return;
-        }
-
-        // Parse screen sessions
-        const lines = output.split('\n').filter(line => {
-          const trimmed = line.trim();
-          // Look for lines with PID.name format (with or without tabs)
-          return trimmed && /^\d+\.\S+/.test(trimmed);
-        });
-        
-        if (lines.length === 0) {
-          bot.sendMessage(chatId, `📭 Screen сессии не найдены\n\n<b>Вывод команды:</b>\n<code>${escapeHtml(output.substring(0, 500))}</code>`, {
-            parse_mode: 'HTML'
-          });
-          return;
-        }
-
-        let response = "📺 <b>Screen Сессии:</b>\n\n";
-        
-        lines.forEach((line, i) => {
-          // Match both formats: with tabs and without
-          // Format: "	1234.session1	(Detached)" or "1234.session1 (Detached)"
-          const match = line.match(/\s*(\d+)\.(\S+)\s+\(([^)]+)\)/);
-          if (match) {
-            const pid = match[1];
-            const name = match[2];
-            const state = match[3];
-            const status = state.toLowerCase().includes('attached') ? '🟢 Подключен' : '🔵 В фоне';
-            
-            response += `${i + 1}. <b>${name}</b>\n`;
-            response += `   PID: ${pid} | ${status}\n\n`;
-          }
-        });
-        
-        response += `🔗 <a href="${ADMIN_UI_URL}">Открыть в админ-панели</a>`;
-        bot.sendMessage(chatId, response, { parse_mode: "HTML" });
-        
-      } catch (sshError) {
-        console.error('Screen Error:', sshError);
-        bot.sendMessage(chatId, `❌ Ошибка при получении Screen сессий: ${sshError.message}`);
-      }
-    } catch (error) {
-      bot.sendMessage(chatId, `❌ Ошибка: ${error.message}`);
-    }
+    // Show menu with different process types
+    const keyboard = {
+      inline_keyboard: [
+        [
+          { text: '📺 Screen сессии', callback_data: 'other_screen' }
+        ],
+        [
+          { text: '⚙️ Systemctl сервисы', callback_data: 'other_systemctl' }
+        ],
+        [
+          { text: '🔄 Процессы (ps)', callback_data: 'other_ps' }
+        ],
+        [
+          { text: '🔗 Открыть админ-панель', url: ADMIN_UI_URL }
+        ]
+      ]
+    };
+    
+    bot.sendMessage(chatId, '🔧 <b>Другие процессы</b>\n\nВыберите тип процессов:', { 
+      parse_mode: "HTML",
+      reply_markup: keyboard
+    });
+  // ============ END ДРУГИЕ ПРОЦЕССЫ MENU ============
+  
   } else if (text === "🔥 Firewall" || text === "/firewall") {
     if (!isAdmin(userId)) {
       bot.sendMessage(chatId, `❌ Доступ запрещен! Только для администратора.`);
@@ -1146,59 +1078,6 @@ bot.on("message", async (msg) => {
         }
         return;
       }
-    } else if (text === "⚡ Команды" || text === "/commands") {
-      if (!isAdmin(userId)) {
-        bot.sendMessage(chatId, `❌ Доступ запрещен! Только для администратора.`);
-        return;
-      }
-
-      try {
-        // Get favorite commands from database
-        const commands = await db.getFavoriteCommands('admin'); // Assuming admin username
-        
-        if (!commands || commands.length === 0) {
-          bot.sendMessage(
-            chatId,
-            `📝 У вас пока нет сохраненных команд.\n\n` +
-            `Добавьте команды через админ-панель в разделе "💻 Терминал" → кнопка "❗"`,
-            { reply_markup: getMainKeyboard() }
-          );
-          return;
-        }
-
-        // Create inline keyboard with commands (max 2 per row)
-        const keyboard = {
-          inline_keyboard: []
-        };
-
-        for (let i = 0; i < commands.length; i += 2) {
-          const row = [];
-          row.push({
-            text: commands[i].name,
-            callback_data: `cmd_${commands[i].id}`
-          });
-          if (i + 1 < commands.length) {
-            row.push({
-              text: commands[i + 1].name,
-              callback_data: `cmd_${commands[i + 1].id}`
-            });
-          }
-          keyboard.inline_keyboard.push(row);
-        }
-
-        bot.sendMessage(
-          chatId,
-          `⚡ Избранные команды:\n\n` +
-          `Выберите команду для выполнения:`,
-          { reply_markup: keyboard }
-        );
-      } catch (error) {
-        console.error('Error loading commands:', error);
-        bot.sendMessage(chatId, `❌ Ошибка загрузки команд: ${error.message}`, {
-          reply_markup: getMainKeyboard()
-        });
-      }
-      return;
     }
     
     // Неизвестная команда
@@ -1291,6 +1170,186 @@ bot.on('callback_query', async (query) => {
         { parse_mode: "HTML" }
       );
     }
+  
+  // ============ OTHER PROCESSES HANDLERS ============
+  } else if (data === 'other_screen') {
+    // Show Screen sessions
+    try {
+      bot.sendMessage(chatId, "⏳ Загружаю Screen сессии...");
+
+      // First check if screen is installed
+      const screenCheck = await executeSSHCommand(
+        `which screen || command -v screen || echo ""`
+      );
+      
+      if (!screenCheck.trim()) {
+        bot.sendMessage(chatId, "❌ Screen не установлен на сервере\n\nУстановите: apt install screen");
+        return;
+      }
+
+      // Get screen sessions for current user
+      const output = await executeSSHCommand(
+        `screen -ls 2>&1`
+      );
+      
+      console.log('Screen output:', output);
+      
+      // Also try to get all users' screen sessions
+      let allUsersOutput = '';
+      try {
+        allUsersOutput = await executeSSHCommand(
+          `sudo ls -la /var/run/screen 2>/dev/null || ls -la /run/screen 2>/dev/null || echo ""`
+        );
+      } catch (e) {
+        console.log('Could not get all users screen sessions:', e.message);
+      }
+      
+      // Check various "no sessions" messages
+      if (output.includes("No Sockets found") || 
+          output.includes("No screen session") ||
+          output.includes("There is no screen to be") ||
+          output.trim() === "") {
+        
+        // Check if there are screen sessions from other users
+        if (allUsersOutput && allUsersOutput.includes('S-')) {
+          bot.sendMessage(chatId, 
+            `📭 Screen сессии текущего пользователя (${process.env.SSH_USERNAME || 'root'}) не найдены\n\n` +
+            `Но обнаружены сессии других пользователей:\n<code>${escapeHtml(allUsersOutput.substring(0, 500))}</code>\n\n` +
+            `Попробуйте: screen -ls от имени нужного пользователя`, 
+            { parse_mode: 'HTML' }
+          );
+        } else {
+          bot.sendMessage(chatId, "📭 Screen сессии не найдены\n\nТекущий пользователь: " + (process.env.SSH_USERNAME || 'root'));
+        }
+        return;
+      }
+
+      // Parse screen sessions
+      const lines = output.split('\n').filter(line => {
+        const trimmed = line.trim();
+        // Look for lines with PID.name format (with or without tabs)
+        return trimmed && /^\d+\.\S+/.test(trimmed);
+      });
+      
+      if (lines.length === 0) {
+        bot.sendMessage(chatId, `📭 Screen сессии не найдены\n\n<b>Вывод команды:</b>\n<code>${escapeHtml(output.substring(0, 500))}</code>`, {
+          parse_mode: 'HTML'
+        });
+        return;
+      }
+
+      let response = "📺 <b>Screen Сессии:</b>\n\n";
+      
+      lines.forEach((line, i) => {
+        // Match both formats: with tabs and without
+        // Format: "	1234.session1	(Detached)" or "1234.session1 (Detached)"
+        const match = line.match(/\s*(\d+)\.(\S+)\s+\(([^)]+)\)/);
+        if (match) {
+          const pid = match[1];
+          const name = match[2];
+          const state = match[3];
+          const status = state.toLowerCase().includes('attached') ? '🟢 Подключен' : '🔵 В фоне';
+          
+          response += `${i + 1}. <b>${name}</b>\n`;
+          response += `   PID: ${pid} | ${status}\n\n`;
+        }
+      });
+      
+      response += `🔗 <a href="${ADMIN_UI_URL}">Открыть в админ-панели</a>`;
+      bot.sendMessage(chatId, response, { parse_mode: "HTML" });
+      
+    } catch (error) {
+      console.error('Screen Error:', error);
+      bot.sendMessage(chatId, `❌ Ошибка при получении Screen сессий: ${error.message}`);
+    }
+  
+  } else if (data === 'other_systemctl') {
+    // Show Systemctl services
+    try {
+      bot.sendMessage(chatId, "⏳ Загружаю systemctl сервисы...");
+      
+      const output = await executeSSHCommand(
+        `systemctl list-units --type=service --state=running --no-pager --no-legend | head -20`
+      );
+      
+      if (!output || output.trim() === "") {
+        bot.sendMessage(chatId, "📭 Активные сервисы не найдены");
+        return;
+      }
+
+      const lines = output.split('\n').filter(line => line.trim());
+      
+      let response = "⚙️ <b>Systemctl Сервисы (TOP 20):</b>\n\n";
+      
+      lines.forEach((line, i) => {
+        const parts = line.trim().split(/\s+/);
+        if (parts.length >= 1) {
+          const serviceName = parts[0].replace('.service', '');
+          response += `${i + 1}. <code>${serviceName}</code>\n`;
+        }
+      });
+      
+      response += `\n📊 Показано: ${lines.length} сервисов\n`;
+      response += `🔗 <a href="${ADMIN_UI_URL}">Открыть в админ-панели</a>`;
+      
+      bot.sendMessage(chatId, response, { parse_mode: "HTML" });
+      
+    } catch (error) {
+      console.error('Systemctl Error:', error);
+      bot.sendMessage(chatId, `❌ Ошибка при получении systemctl сервисов: ${error.message}`);
+    }
+  
+  } else if (data === 'other_ps') {
+    // Show top processes
+    try {
+      bot.sendMessage(chatId, "⏳ Загружаю топ процессов...");
+      
+      const output = await executeSSHCommand(
+        `ps aux | tail -n +2`
+      );
+      
+      const lines = output.split('\n').filter(line => line.trim());
+      const processes = [];
+      
+      lines.forEach(line => {
+        const parts = line.split(/\s+/);
+        if (parts.length >= 11) {
+          processes.push({
+            pid: parts[1],
+            user: parts[0],
+            cpu: parseFloat(parts[2]) || 0,
+            memory: parseFloat(parts[3]) || 0,
+            command: parts.slice(10).join(' ')
+          });
+        }
+      });
+      
+      // Sort by CPU + Memory (highest first)
+      processes.sort((a, b) => {
+        const aTotal = a.cpu + a.memory;
+        const bTotal = b.cpu + b.memory;
+        return bTotal - aTotal;
+      });
+      
+      // Take top 10
+      const topProcesses = processes.slice(0, 10);
+
+      let response = "🔄 <b>Топ 10 процессов по загруженности:</b>\n\n";
+      topProcesses.forEach((p, i) => {
+        response += `${i + 1}. <b>${p.command.substring(0, 30)}</b>\n`;
+        response += `   PID: ${p.pid} | User: ${p.user}\n`;
+        response += `   CPU: ${p.cpu.toFixed(1)}% | RAM: ${p.memory.toFixed(1)}%\n\n`;
+      });
+      response += `🔗 <a href="${ADMIN_UI_URL}">Открыть в админ-панели</a>`;
+
+      bot.sendMessage(chatId, response, { parse_mode: "HTML" });
+      
+    } catch (error) {
+      console.error('PS Error:', error);
+      bot.sendMessage(chatId, `❌ Ошибка при получении процессов: ${error.message}`);
+    }
+  // ============ END OTHER PROCESSES HANDLERS ============
+  
   } else if (data === 'pm2_list') {
     // Show PM2 processes list and update cache
     try {
