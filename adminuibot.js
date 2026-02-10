@@ -119,6 +119,18 @@ function setupBotHandlers() {
 // User states for interactive commands
 const userStates = new Map();
 
+// Cache for PM2 processes (updated when user clicks "Show processes")
+let pm2ProcessesCache = null;
+
+// Default PM2 processes list
+const DEFAULT_PM2_PROCESSES = [
+  { name: 'adminui', pm_id: 0, status: 'online' },
+  { name: 'afkbot', pm_id: 1, status: 'online' },
+  { name: 'vpn-api', pm_id: 2, status: 'online' },
+  { name: 'vpn-bot', pm_id: 3, status: 'online' },
+  { name: '1xBetLineBoom', pm_id: 4, status: 'online' }
+];
+
 // Функция для экранирования HTML символов
 function escapeHtml(text) {
   if (!text) return '';
@@ -1280,7 +1292,7 @@ bot.on('callback_query', async (query) => {
       );
     }
   } else if (data === 'pm2_list') {
-    // Show PM2 processes list
+    // Show PM2 processes list and update cache
     try {
       bot.sendMessage(chatId, "⏳ Загружаю PM2 процессы...");
       
@@ -1301,8 +1313,18 @@ bot.on('callback_query', async (query) => {
       
       if (processes.length === 0) {
         bot.sendMessage(chatId, "📭 PM2 процессы не найдены");
+        // Clear cache if no processes found
+        pm2ProcessesCache = null;
         return;
       }
+
+      // Update cache with actual processes
+      pm2ProcessesCache = processes.map(p => ({
+        name: p.name,
+        pm_id: p.pm_id,
+        status: p.pm2_env.status,
+        pid: p.pid
+      }));
 
       let response = "🚀 <b>PM2 Процессы:</b>\n\n";
       
@@ -1319,7 +1341,8 @@ bot.on('callback_query', async (query) => {
         response += `   Uptime: ${uptime} мин | Restarts: ${p.pm2_env.restart_time || 0}\n\n`;
       });
       
-      response += `\n📊 Всего процессов: ${processes.length}`;
+      response += `\n📊 Всего процессов: ${processes.length}\n`;
+      response += `✅ Список процессов обновлен`;
       
       bot.sendMessage(chatId, response, { 
         parse_mode: "HTML",
@@ -1328,25 +1351,12 @@ bot.on('callback_query', async (query) => {
     } catch (error) {
       bot.sendMessage(chatId, `❌ Ошибка при получении PM2 процессов: ${error.message}`);
     }
+  // ============ PM2 LOGS HANDLER ============
   } else if (data === 'pm2_logs') {
-    // Show PM2 processes for log selection
+    // Show PM2 processes for log selection (use cache or default list)
     try {
-      bot.sendMessage(chatId, "⏳ Загружаю список PM2 процессов...");
-      
-      const pm2Check = await executeSSHCommand(
-        `which pm2 || command -v pm2 || echo ""`
-      );
-      
-      if (!pm2Check.trim()) {
-        bot.sendMessage(chatId, "❌ PM2 не установлен на сервере");
-        return;
-      }
-
-      const output = await executeSSHCommand(
-        `export PATH=$PATH:/usr/local/bin:/usr/bin:~/.npm-global/bin:~/.nvm/versions/node/*/bin && pm2 jlist 2>/dev/null || echo "[]"`
-      );
-      
-      const processes = JSON.parse(output);
+      // Use cache if available, otherwise use default list
+      const processes = pm2ProcessesCache || DEFAULT_PM2_PROCESSES;
       
       if (processes.length === 0) {
         bot.sendMessage(chatId, "📭 PM2 процессы не найдены");
@@ -1359,30 +1369,30 @@ bot.on('callback_query', async (query) => {
       };
 
       processes.forEach((p) => {
+        const statusIcon = p.status === 'online' ? '✅' : '❌';
         keyboard.inline_keyboard.push([{
-          text: `${p.pm2_env.status === 'online' ? '✅' : '❌'} ${p.name} (ID: ${p.pm_id})`,
+          text: `${statusIcon} ${p.name} (ID: ${p.pm_id})`,
           callback_data: `pm2_log_${p.name}`
         }]);
       });
 
+      const cacheStatus = pm2ProcessesCache ? '✅ Актуальный список' : '📋 Базовый список';
       bot.sendMessage(
         chatId,
-        `📋 Выберите процесс для просмотра логов:`,
+        `📋 Выберите процесс для просмотра логов:\n\n${cacheStatus}`,
         { reply_markup: keyboard }
       );
     } catch (error) {
       bot.sendMessage(chatId, `❌ Ошибка: ${error.message}`);
     }
+  // ============ END PM2 LOGS HANDLER ============
+  
+  // ============ PM2 RESTART HANDLER ============
   } else if (data === 'pm2_restart') {
-    // Show PM2 processes for restart
+    // Show PM2 processes for restart (use cache or default list)
     try {
-      bot.sendMessage(chatId, "⏳ Загружаю список PM2 процессов...");
-      
-      const output = await executeSSHCommand(
-        `export PATH=$PATH:/usr/local/bin:/usr/bin:~/.npm-global/bin:~/.nvm/versions/node/*/bin && pm2 jlist 2>/dev/null || echo "[]"`
-      );
-      
-      const processes = JSON.parse(output);
+      // Use cache if available, otherwise use default list
+      const processes = pm2ProcessesCache || DEFAULT_PM2_PROCESSES;
       
       if (processes.length === 0) {
         bot.sendMessage(chatId, "📭 PM2 процессы не найдены");
@@ -1394,8 +1404,9 @@ bot.on('callback_query', async (query) => {
       };
 
       processes.forEach((p) => {
+        const statusIcon = p.status === 'online' ? '✅' : '❌';
         keyboard.inline_keyboard.push([{
-          text: `${p.pm2_env.status === 'online' ? '✅' : '❌'} ${p.name} (ID: ${p.pm_id})`,
+          text: `${statusIcon} ${p.name} (ID: ${p.pm_id})`,
           callback_data: `pm2_restart_${p.name}`
         }]);
       });
@@ -1405,24 +1416,24 @@ bot.on('callback_query', async (query) => {
         callback_data: 'pm2_restart_all'
       }]);
 
+      const cacheStatus = pm2ProcessesCache ? '✅ Актуальный список' : '📋 Базовый список';
       bot.sendMessage(
         chatId,
-        `🔄 Выберите процесс для перезапуска:`,
+        `🔄 Выберите процесс для перезапуска:\n\n${cacheStatus}`,
         { reply_markup: keyboard }
       );
     } catch (error) {
       bot.sendMessage(chatId, `❌ Ошибка: ${error.message}`);
     }
+  // ============ END PM2 RESTART HANDLER ============
+  
+  // ============ PM2 PULL & RUN HANDLER ============
+  // ============ PM2 PULL & RUN HANDLER ============
   } else if (data === 'pm2_pull_run') {
-    // Show PM2 processes for pull and run
+    // Show PM2 processes for pull and run (use cache or default list)
     try {
-      bot.sendMessage(chatId, "⏳ Загружаю список PM2 процессов...");
-      
-      const output = await executeSSHCommand(
-        `export PATH=$PATH:/usr/local/bin:/usr/bin:~/.npm-global/bin:~/.nvm/versions/node/*/bin && pm2 jlist 2>/dev/null || echo "[]"`
-      );
-      
-      const processes = JSON.parse(output);
+      // Use cache if available, otherwise use default list
+      const processes = pm2ProcessesCache || DEFAULT_PM2_PROCESSES;
       
       if (processes.length === 0) {
         bot.sendMessage(chatId, "📭 PM2 процессы не найдены");
@@ -1434,30 +1445,30 @@ bot.on('callback_query', async (query) => {
       };
 
       processes.forEach((p) => {
+        const statusIcon = p.status === 'online' ? '✅' : '❌';
         keyboard.inline_keyboard.push([{
-          text: `${p.pm2_env.status === 'online' ? '✅' : '❌'} ${p.name} (ID: ${p.pm_id})`,
+          text: `${statusIcon} ${p.name} (ID: ${p.pm_id})`,
           callback_data: `pm2_pullrun_${p.name}`
         }]);
       });
 
+      const cacheStatus = pm2ProcessesCache ? '✅ Актуальный список' : '📋 Базовый список';
       bot.sendMessage(
         chatId,
-        `🔄 Выберите процесс для обновления и перезапуска:\n\n⚠️ Будет выполнено:\n1. git pull\n2. npm install (если нужно)\n3. pm2 restart`,
+        `🔄 Выберите процесс для обновления и перезапуска:\n\n⚠️ Будет выполнено:\n1. git pull\n2. npm install (если нужно)\n3. pm2 restart\n\n${cacheStatus}`,
         { reply_markup: keyboard }
       );
     } catch (error) {
       bot.sendMessage(chatId, `❌ Ошибка: ${error.message}`);
     }
+  // ============ END PM2 PULL & RUN HANDLER ============
+  
+  // ============ PM2 STOP HANDLER ============
   } else if (data === 'pm2_stop') {
-    // Show PM2 processes for stop
+    // Show PM2 processes for stop (use cache or default list)
     try {
-      bot.sendMessage(chatId, "⏳ Загружаю список PM2 процессов...");
-      
-      const output = await executeSSHCommand(
-        `export PATH=$PATH:/usr/local/bin:/usr/bin:~/.npm-global/bin:~/.nvm/versions/node/*/bin && pm2 jlist 2>/dev/null || echo "[]"`
-      );
-      
-      const processes = JSON.parse(output);
+      // Use cache if available, otherwise use default list
+      const processes = pm2ProcessesCache || DEFAULT_PM2_PROCESSES;
       
       if (processes.length === 0) {
         bot.sendMessage(chatId, "📭 PM2 процессы не найдены");
@@ -1469,8 +1480,9 @@ bot.on('callback_query', async (query) => {
       };
 
       processes.forEach((p) => {
+        const statusIcon = p.status === 'online' ? '✅' : '❌';
         keyboard.inline_keyboard.push([{
-          text: `${p.pm2_env.status === 'online' ? '✅' : '❌'} ${p.name} (ID: ${p.pm_id})`,
+          text: `${statusIcon} ${p.name} (ID: ${p.pm_id})`,
           callback_data: `pm2_stop_${p.name}`
         }]);
       });
@@ -1480,24 +1492,24 @@ bot.on('callback_query', async (query) => {
         callback_data: 'pm2_stop_all'
       }]);
 
+      const cacheStatus = pm2ProcessesCache ? '✅ Актуальный список' : '📋 Базовый список';
       bot.sendMessage(
         chatId,
-        `⏹️ Выберите процесс для остановки:`,
+        `⏹️ Выберите процесс для остановки:\n\n${cacheStatus}`,
         { reply_markup: keyboard }
       );
     } catch (error) {
       bot.sendMessage(chatId, `❌ Ошибка: ${error.message}`);
     }
+  // ============ END PM2 STOP HANDLER ============
+  
+  // ============ PM2 START HANDLER ============
   } else if (data === 'pm2_start') {
-    // Show PM2 processes for start
+    // Show PM2 processes for start (use cache or default list)
     try {
-      bot.sendMessage(chatId, "⏳ Загружаю список PM2 процессов...");
-      
-      const output = await executeSSHCommand(
-        `export PATH=$PATH:/usr/local/bin:/usr/bin:~/.npm-global/bin:~/.nvm/versions/node/*/bin && pm2 jlist 2>/dev/null || echo "[]"`
-      );
-      
-      const processes = JSON.parse(output);
+      // Use cache if available, otherwise use default list
+      // Use cache if available, otherwise use default list
+      const processes = pm2ProcessesCache || DEFAULT_PM2_PROCESSES;
       
       if (processes.length === 0) {
         bot.sendMessage(chatId, "📭 PM2 процессы не найдены");
@@ -1509,8 +1521,9 @@ bot.on('callback_query', async (query) => {
       };
 
       processes.forEach((p) => {
+        const statusIcon = p.status === 'online' ? '✅' : '❌';
         keyboard.inline_keyboard.push([{
-          text: `${p.pm2_env.status === 'online' ? '✅' : '❌'} ${p.name} (ID: ${p.pm_id})`,
+          text: `${statusIcon} ${p.name} (ID: ${p.pm_id})`,
           callback_data: `pm2_start_${p.name}`
         }]);
       });
@@ -1520,14 +1533,18 @@ bot.on('callback_query', async (query) => {
         callback_data: 'pm2_start_all'
       }]);
 
+      const cacheStatus = pm2ProcessesCache ? '✅ Актуальный список' : '📋 Базовый список';
       bot.sendMessage(
         chatId,
-        `▶️ Выберите процесс для запуска:`,
+        `▶️ Выберите процесс для запуска:\n\n${cacheStatus}`,
         { reply_markup: keyboard }
       );
     } catch (error) {
       bot.sendMessage(chatId, `❌ Ошибка: ${error.message}`);
     }
+  // ============ END PM2 START HANDLER ============
+  
+  // ============ PM2 PULLRUN EXECUTION ============
   } else if (data.startsWith('pm2_pullrun_')) {
     const processName = data.replace('pm2_pullrun_', '');
     
