@@ -490,81 +490,33 @@ bot.on("message", async (msg) => {
       return;
     }
     
-    try {
-      bot.sendMessage(chatId, "⏳ Загружаю PM2 процессы...");
-
-      try {
-        // Check if PM2 is available and get processes
-        const pm2Check = await executeSSHCommand(
-          `which pm2 || command -v pm2 || echo ""`
-        );
-        
-        if (!pm2Check.trim()) {
-          bot.sendMessage(chatId, "❌ PM2 не установлен на сервере");
-          return;
-        }
-
-        const output = await executeSSHCommand(
-          `export PATH=$PATH:/usr/local/bin:/usr/bin:~/.npm-global/bin:~/.nvm/versions/node/*/bin && pm2 jlist 2>/dev/null || echo "[]"`
-        );
-        
-        const processes = JSON.parse(output);
-        
-        if (processes.length === 0) {
-          bot.sendMessage(chatId, "📭 PM2 процессы не найдены");
-          return;
-        }
-
-        let response = "🚀 <b>PM2 Процессы:</b>\n\n";
-        
-        processes.forEach((p, i) => {
-          const status = p.pm2_env.status === 'online' ? '✅' : '❌';
-          const uptime = p.pm2_env.pm_uptime ? 
-            Math.floor((Date.now() - p.pm2_env.pm_uptime) / 1000 / 60) : 0;
-          const memory = p.monit ? (p.monit.memory / 1024 / 1024).toFixed(1) : 'N/A';
-          const cpu = p.monit ? p.monit.cpu : 'N/A';
-          
-          response += `${i + 1}. ${status} <b>${p.name}</b>\n`;
-          response += `   ID: ${p.pm_id} | PID: ${p.pid || 'N/A'}\n`;
-          response += `   CPU: ${cpu}% | RAM: ${memory} MB\n`;
-          response += `   Uptime: ${uptime} мин | Restarts: ${p.pm2_env.restart_time || 0}\n\n`;
-        });
-        
-        response += `\nВыберите действие:`;
-        
-        // Create inline keyboard with PM2 actions
-        const keyboard = {
-          inline_keyboard: [
-            [
-              { text: '📋 Просмотреть логи', callback_data: 'pm2_logs' },
-              { text: '🔄 Перезапустить', callback_data: 'pm2_restart' }
-            ],
-            [
-              { text: '⏹️ Остановить', callback_data: 'pm2_stop' },
-              { text: '▶️ Запустить', callback_data: 'pm2_start' }
-            ],
-            [
-              { text: '🔄 Pull & Run', callback_data: 'pm2_pull_run' }
-            ],
-            [
-              { text: '🔗 Открыть админ-панель', url: ADMIN_UI_URL }
-            ]
-          ]
-        };
-        
-        bot.sendMessage(chatId, response, { 
-          parse_mode: "HTML",
-          reply_markup: keyboard
-        });
-
-        
-      } catch (sshError) {
-        console.error('PM2 Error:', sshError);
-        bot.sendMessage(chatId, `❌ Ошибка при получении PM2 процессов: ${sshError.message}`);
-      }
-    } catch (error) {
-      bot.sendMessage(chatId, `❌ Ошибка: ${error.message}`);
-    }
+    // Show PM2 menu without loading processes immediately
+    const keyboard = {
+      inline_keyboard: [
+        [
+          { text: '📋 Показать процессы', callback_data: 'pm2_list' }
+        ],
+        [
+          { text: '📜 Просмотреть логи', callback_data: 'pm2_logs' },
+          { text: '🔄 Перезапустить', callback_data: 'pm2_restart' }
+        ],
+        [
+          { text: '⏹️ Остановить', callback_data: 'pm2_stop' },
+          { text: '▶️ Запустить', callback_data: 'pm2_start' }
+        ],
+        [
+          { text: '🔄 Pull & Run', callback_data: 'pm2_pull_run' }
+        ],
+        [
+          { text: '🔗 Открыть админ-панель', url: ADMIN_UI_URL }
+        ]
+      ]
+    };
+    
+    bot.sendMessage(chatId, '🚀 <b>PM2 Управление</b>\n\nВыберите действие:', { 
+      parse_mode: "HTML",
+      reply_markup: keyboard
+    });
   } else if (text === "📺 Screen" || text === "/screen") {
     if (!isAdmin(userId)) {
       bot.sendMessage(chatId, `❌ Доступ запрещен! Только для администратора.`);
@@ -575,26 +527,73 @@ bot.on("message", async (msg) => {
       bot.sendMessage(chatId, "⏳ Загружаю Screen сессии...");
 
       try {
-        const output = await executeSSHCommand(
-          `screen -ls 2>/dev/null || echo "No Sockets found"`
+        // First check if screen is installed
+        const screenCheck = await executeSSHCommand(
+          `which screen || command -v screen || echo ""`
         );
         
-        if (output.includes("No Sockets found")) {
-          bot.sendMessage(chatId, "📭 Screen сессии не найдены");
+        if (!screenCheck.trim()) {
+          bot.sendMessage(chatId, "❌ Screen не установлен на сервере\n\nУстановите: apt install screen");
           return;
         }
 
-        const lines = output.split('\n').filter(line => line.trim() && line.includes('.'));
+        // Get screen sessions for current user
+        const output = await executeSSHCommand(
+          `screen -ls 2>&1`
+        );
+        
+        console.log('Screen output:', output);
+        
+        // Also try to get all users' screen sessions
+        let allUsersOutput = '';
+        try {
+          allUsersOutput = await executeSSHCommand(
+            `sudo ls -la /var/run/screen 2>/dev/null || ls -la /run/screen 2>/dev/null || echo ""`
+          );
+        } catch (e) {
+          console.log('Could not get all users screen sessions:', e.message);
+        }
+        
+        // Check various "no sessions" messages
+        if (output.includes("No Sockets found") || 
+            output.includes("No screen session") ||
+            output.includes("There is no screen to be") ||
+            output.trim() === "") {
+          
+          // Check if there are screen sessions from other users
+          if (allUsersOutput && allUsersOutput.includes('S-')) {
+            bot.sendMessage(chatId, 
+              `📭 Screen сессии текущего пользователя (${process.env.SSH_USERNAME || 'root'}) не найдены\n\n` +
+              `Но обнаружены сессии других пользователей:\n<code>${escapeHtml(allUsersOutput.substring(0, 500))}</code>\n\n` +
+              `Попробуйте: screen -ls от имени нужного пользователя`, 
+              { parse_mode: 'HTML' }
+            );
+          } else {
+            bot.sendMessage(chatId, "📭 Screen сессии не найдены\n\nТекущий пользователь: " + (process.env.SSH_USERNAME || 'root'));
+          }
+          return;
+        }
+
+        // Parse screen sessions
+        const lines = output.split('\n').filter(line => {
+          const trimmed = line.trim();
+          // Look for lines with PID.name format (with or without tabs)
+          return trimmed && /^\d+\.\S+/.test(trimmed);
+        });
         
         if (lines.length === 0) {
-          bot.sendMessage(chatId, "📭 Screen сессии не найдены");
+          bot.sendMessage(chatId, `📭 Screen сессии не найдены\n\n<b>Вывод команды:</b>\n<code>${escapeHtml(output.substring(0, 500))}</code>`, {
+            parse_mode: 'HTML'
+          });
           return;
         }
 
         let response = "📺 <b>Screen Сессии:</b>\n\n";
         
         lines.forEach((line, i) => {
-          const match = line.match(/(\d+)\.(\S+)\s+\(([^)]+)\)/);
+          // Match both formats: with tabs and without
+          // Format: "	1234.session1	(Detached)" or "1234.session1 (Detached)"
+          const match = line.match(/\s*(\d+)\.(\S+)\s+\(([^)]+)\)/);
           if (match) {
             const pid = match[1];
             const name = match[2];
@@ -1279,6 +1278,55 @@ bot.on('callback_query', async (query) => {
           `443/tcp                    ALLOW       Anywhere</code>`,
         { parse_mode: "HTML" }
       );
+    }
+  } else if (data === 'pm2_list') {
+    // Show PM2 processes list
+    try {
+      bot.sendMessage(chatId, "⏳ Загружаю PM2 процессы...");
+      
+      const pm2Check = await executeSSHCommand(
+        `which pm2 || command -v pm2 || echo ""`
+      );
+      
+      if (!pm2Check.trim()) {
+        bot.sendMessage(chatId, "❌ PM2 не установлен на сервере");
+        return;
+      }
+
+      const output = await executeSSHCommand(
+        `export PATH=$PATH:/usr/local/bin:/usr/bin:~/.npm-global/bin:~/.nvm/versions/node/*/bin && pm2 jlist 2>/dev/null || echo "[]"`
+      );
+      
+      const processes = JSON.parse(output);
+      
+      if (processes.length === 0) {
+        bot.sendMessage(chatId, "📭 PM2 процессы не найдены");
+        return;
+      }
+
+      let response = "🚀 <b>PM2 Процессы:</b>\n\n";
+      
+      processes.forEach((p, i) => {
+        const status = p.pm2_env.status === 'online' ? '✅' : '❌';
+        const uptime = p.pm2_env.pm_uptime ? 
+          Math.floor((Date.now() - p.pm2_env.pm_uptime) / 1000 / 60) : 0;
+        const memory = p.monit ? (p.monit.memory / 1024 / 1024).toFixed(1) : 'N/A';
+        const cpu = p.monit ? p.monit.cpu : 'N/A';
+        
+        response += `${i + 1}. ${status} <b>${p.name}</b>\n`;
+        response += `   ID: ${p.pm_id} | PID: ${p.pid || 'N/A'}\n`;
+        response += `   CPU: ${cpu}% | RAM: ${memory} MB\n`;
+        response += `   Uptime: ${uptime} мин | Restarts: ${p.pm2_env.restart_time || 0}\n\n`;
+      });
+      
+      response += `\n📊 Всего процессов: ${processes.length}`;
+      
+      bot.sendMessage(chatId, response, { 
+        parse_mode: "HTML",
+        reply_markup: getMainKeyboard()
+      });
+    } catch (error) {
+      bot.sendMessage(chatId, `❌ Ошибка при получении PM2 процессов: ${error.message}`);
     }
   } else if (data === 'pm2_logs') {
     // Show PM2 processes for log selection

@@ -3,6 +3,8 @@ temp/
 .vscode/
 .DS_Store
 npm/
+MDs/
+steering/
 package-lock.json
 .env
 upload.md
@@ -18,5 +20,7 @@ adminui.sh
 botadminui.sh
 stopadminui.sh
 stopadminuibot.sh
+russian-language.md
+roadmap.txt
 
 DISCORD_OAUTH_SETUP.md
