@@ -1645,7 +1645,29 @@ bot.on('callback_query', async (query) => {
   // ============ PM2 PULLRUN EXECUTION ============
   } else if (data.startsWith('pm2_pullrun_')) {
     const processName = data.replace('pm2_pullrun_', '');
-    
+
+    // ---- Кастомный деплой для vidrimers через скрипт dep-vidri.sh ----
+    if (processName === 'vidrimers') {
+      try {
+        bot.sendMessage(chatId, `🔄 Запускаю деплой <b>${processName}</b>...\n\n⏳ Выполняю скрипт, это может занять некоторое время...`, { parse_mode: 'HTML' });
+
+        const deployOutput = await executeSSHCommand(
+          `bash /home/vidrimers.site/dep-vidri.sh 2>&1`
+        );
+
+        bot.sendMessage(chatId, `✅ Деплой завершён!\n\n<code>${escapeHtml(deployOutput.substring(0, 3000))}</code>`, {
+          parse_mode: 'HTML',
+          reply_markup: getMainKeyboard()
+        });
+      } catch (error) {
+        bot.sendMessage(chatId, `❌ Ошибка деплоя: ${error.message}`, {
+          reply_markup: getMainKeyboard()
+        });
+      }
+      return;
+    }
+    // ---- Конец кастомного деплоя vidrimers ----
+
     try {
       bot.sendMessage(chatId, `🔄 Обновляю и перезапускаю процесс ${processName}...\n\n⏳ Шаг 1/3: Получаю информацию о процессе...`);
       
