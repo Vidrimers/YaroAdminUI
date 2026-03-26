@@ -130,7 +130,8 @@ const DEFAULT_PM2_PROCESSES = [
   { name: 'vpn-bot', pm_id: 3, status: 'online' },
   { name: '1xBetLineBoom', pm_id: 4, status: 'online' },
   { name: 'vidrimers', pm_id: 5, status: 'online' },
-  { name: 'ytdownload', pm_id: 6, status: 'online' }
+  { name: 'ytdownload', pm_id: 6, status: 'online' },
+  { name: 'meowgang-bot', pm_id: 7, status: 'online' }
 ];
 
 // Функция для экранирования HTML символов
