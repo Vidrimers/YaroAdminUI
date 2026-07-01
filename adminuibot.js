@@ -1693,10 +1693,10 @@ bot.on('callback_query', async (query) => {
     if (processName === 'watchrebel-server') {
       try {
         bot.sendMessage(chatId, `🔄 Запускаю деплой <b>${processName}</b>...`, { parse_mode: 'HTML' });
-        const deployOutput = await executeSSHCommand(
-          `cd /home/watchrebel && git pull --quiet 2>&1 | grep -q 'client/' && (npm run build --workspace=client && pm2 restart watchrebel-server) || pm2 restart watchrebel-server`
-        );
-        bot.sendMessage(chatId, `✅ ${processName} обновлён и перезапущен!\n\n<code>${escapeHtml(deployOutput.substring(0, 3000))}</code>`, {
+        const pullOutput = await executeSSHCommand('cd /home/watchrebel && git pull 2>&1');
+        const buildOutput = await executeSSHCommand('cd /home/watchrebel && npm run build --workspace=client 2>&1');
+        await executeSSHCommand('pm2 restart watchrebel-server');
+        bot.sendMessage(chatId, `✅ ${processName} обновлён и перезапущен!\n\n📥 Pull:\n<code>${escapeHtml(pullOutput.substring(0, 1500))}</code>\n\n🔨 Build:\n<code>${escapeHtml(buildOutput.substring(0, 1500))}</code>`, {
           parse_mode: 'HTML',
           reply_markup: getMainKeyboard()
         });
