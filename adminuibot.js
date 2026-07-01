@@ -131,7 +131,9 @@ const DEFAULT_PM2_PROCESSES = [
   { name: '1xBetLineBoom', pm_id: 4, status: 'online' },
   { name: 'vidrimers', pm_id: 5, status: 'online' },
   { name: 'ytdownload', pm_id: 6, status: 'online' },
-  { name: 'meowgang-bot', pm_id: 7, status: 'online' }
+  { name: 'meowgang-bot', pm_id: 7, status: 'online' },
+  { name: 'watchrebel-server', pm_id: 8, status: 'online' },
+  { name: 'watchrebel-telegram', pm_id: 9, status: 'online' }
 ];
 
 // Функция для экранирования HTML символов
@@ -1671,6 +1673,39 @@ bot.on('callback_query', async (query) => {
     }
     // ---- Конец кастомного деплоя vidrimers ----
 
+    // ---- Кастомный деплой для watchrebel-telegram ----
+    if (processName === 'watchrebel-telegram') {
+      try {
+        bot.sendMessage(chatId, `🔄 Запускаю деплой <b>${processName}</b>...`, { parse_mode: 'HTML' });
+        const pullOutput = await executeSSHCommand('cd /home/watchrebel && git pull origin master 2>&1');
+        await executeSSHCommand('pm2 restart watchrebel-telegram');
+        bot.sendMessage(chatId, `✅ ${processName} обновлён и перезапущен!\n\n<code>${escapeHtml(pullOutput.substring(0, 3000))}</code>`, {
+          parse_mode: 'HTML',
+          reply_markup: getMainKeyboard()
+        });
+      } catch (error) {
+        bot.sendMessage(chatId, `❌ Ошибка деплоя: ${error.message}`, { reply_markup: getMainKeyboard() });
+      }
+      return;
+    }
+
+    // ---- Кастомный деплой для watchrebel-server ----
+    if (processName === 'watchrebel-server') {
+      try {
+        bot.sendMessage(chatId, `🔄 Запускаю деплой <b>${processName}</b>...`, { parse_mode: 'HTML' });
+        const deployOutput = await executeSSHCommand(
+          `cd /home/watchrebel && git pull --quiet 2>&1 | grep -q 'client/' && (npm run build --workspace=client && pm2 restart watchrebel-server) || pm2 restart watchrebel-server`
+        );
+        bot.sendMessage(chatId, `✅ ${processName} обновлён и перезапущен!\n\n<code>${escapeHtml(deployOutput.substring(0, 3000))}</code>`, {
+          parse_mode: 'HTML',
+          reply_markup: getMainKeyboard()
+        });
+      } catch (error) {
+        bot.sendMessage(chatId, `❌ Ошибка деплоя: ${error.message}`, { reply_markup: getMainKeyboard() });
+      }
+      return;
+    }
+
     try {
       bot.sendMessage(chatId, `🔄 Обновляю и перезапускаю процесс ${processName}...\n\n⏳ Шаг 1/3: Получаю информацию о процессе...`);
       
@@ -1698,7 +1733,9 @@ bot.on('callback_query', async (query) => {
         'adminuibot': '/home/adminui',
         'afkbot': '/home/afkbot',
         'vpn-api': '/home/vpn-api',
-        '1xBetLineBoom': '/home/1xBetLineBoom'
+        '1xBetLineBoom': '/home/1xBetLineBoom',
+        'watchrebel-server': '/home/watchrebel',
+        'watchrebel-telegram': '/home/watchrebel'
       };
       
       // If we couldn't find working dir, try common locations
