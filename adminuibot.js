@@ -15,6 +15,20 @@ const SERVER_IP = process.env.SERVER_IP || "localhost";
 const ADMIN_UI_URL = `http://${SERVER_IP}:${process.env.PORT || 3000}`;
 const DB_PATH = process.env.DB_PATH || "./adminui.db";
 
+// Local servers configuration
+const SERVERS = {
+  intel: {
+    ip: process.env.SERVER_INTEL_IP || '10.0.0.5',
+    mac: process.env.SERVER_INTEL_MAC || 'd8:bb:c1:09:14:65',
+    name: 'Server Intel'
+  },
+  r3: {
+    ip: process.env.SERVER_R3_IP || '10.0.0.3',
+    mac: process.env.SERVER_R3_MAC || '68:1d:ef:60:de:c9',
+    name: 'Server R3'
+  }
+};
+
 if (!TELEGRAM_BOT_TOKEN) {
   console.error("TELEGRAM_BOT_TOKEN not set in .env");
   process.exit(1);
@@ -385,8 +399,8 @@ function getMenuInlineKeyboard() {
 function getHomeKeyboard() {
   return {
     inline_keyboard: [
-      [{ text: '🖥️ Server Intel (10.0.0.5)', callback_data: 'home_intel' }],
-      [{ text: '🖥️ Server R3 (10.0.0.3)', callback_data: 'home_r3' }],
+      [{ text: `🖥️ ${SERVERS.intel.name} (${SERVERS.intel.ip})`, callback_data: 'home_intel' }],
+      [{ text: `🖥️ ${SERVERS.r3.name} (${SERVERS.r3.ip})`, callback_data: 'home_r3' }],
       [{ text: '🌐 Общее', callback_data: 'home_all' }],
       [{ text: '⬅️ Назад', callback_data: 'menu_back' }]
     ]
@@ -518,7 +532,7 @@ bot.on('callback_query', async (query) => {
     // ============ WAKE ON LAN ============
     case 'intel_wake':
       try {
-        await executeSSHCommand('wakeonlan -i 10.0.0.5 d8:bb:c1:09:14:65');
+        await executeSSHCommand(`wakeonlan -i ${SERVERS.intel.ip} ${SERVERS.intel.mac}`);
         bot.answerCallbackQuery(query.id, { text: '✅ Сигнал отправлен на Server Intel!' });
       } catch (err) {
         bot.answerCallbackQuery(query.id, { text: '❌ Ошибка: ' + err.message, show_alert: true });
@@ -526,7 +540,7 @@ bot.on('callback_query', async (query) => {
       break;
     case 'r3_wake':
       try {
-        await executeSSHCommand('wakeonlan -i 10.0.0.3 68:1d:ef:60:de:c9');
+        await executeSSHCommand(`wakeonlan -i ${SERVERS.r3.ip} ${SERVERS.r3.mac}`);
         bot.answerCallbackQuery(query.id, { text: '✅ Сигнал отправлен на Server R3!' });
       } catch (err) {
         bot.answerCallbackQuery(query.id, { text: '❌ Ошибка: ' + err.message, show_alert: true });
@@ -534,7 +548,7 @@ bot.on('callback_query', async (query) => {
       break;
     case 'all_wake':
       try {
-        await executeSSHCommand('wakeonlan -i 10.0.0.5 d8:bb:c1:09:14:65 && wakeonlan -i 10.0.0.3 68:1d:ef:60:de:c9');
+        await executeSSHCommand(`wakeonlan -i ${SERVERS.intel.ip} ${SERVERS.intel.mac} && wakeonlan -i ${SERVERS.r3.ip} ${SERVERS.r3.mac}`);
         bot.answerCallbackQuery(query.id, { text: '✅ Сигнал отправлен на оба сервера!' });
       } catch (err) {
         bot.answerCallbackQuery(query.id, { text: '❌ Ошибка: ' + err.message, show_alert: true });
@@ -544,7 +558,7 @@ bot.on('callback_query', async (query) => {
     // ============ SHUTDOWN ============
     case 'intel_shutdown':
       try {
-        await executeSSHOnServer('10.0.0.5', 'sudo shutdown -h now');
+        await executeSSHOnServer(SERVERS.intel.ip, 'sudo shutdown -h now');
         bot.answerCallbackQuery(query.id, { text: '✅ Server Intel выключается...' });
       } catch (err) {
         bot.answerCallbackQuery(query.id, { text: '❌ Ошибка: ' + err.message, show_alert: true });
@@ -552,7 +566,7 @@ bot.on('callback_query', async (query) => {
       break;
     case 'r3_shutdown':
       try {
-        await executeSSHOnServer('10.0.0.3', 'sudo shutdown -h now');
+        await executeSSHOnServer(SERVERS.r3.ip, 'sudo shutdown -h now');
         bot.answerCallbackQuery(query.id, { text: '✅ Server R3 выключается...' });
       } catch (err) {
         bot.answerCallbackQuery(query.id, { text: '❌ Ошибка: ' + err.message, show_alert: true });
@@ -560,8 +574,8 @@ bot.on('callback_query', async (query) => {
       break;
     case 'all_shutdown':
       try {
-        await executeSSHOnServer('10.0.0.5', 'sudo shutdown -h now');
-        await executeSSHOnServer('10.0.0.3', 'sudo shutdown -h now');
+        await executeSSHOnServer(SERVERS.intel.ip, 'sudo shutdown -h now');
+        await executeSSHOnServer(SERVERS.r3.ip, 'sudo shutdown -h now');
         bot.answerCallbackQuery(query.id, { text: '✅ Оба сервера выключаются...' });
       } catch (err) {
         bot.answerCallbackQuery(query.id, { text: '❌ Ошибка: ' + err.message, show_alert: true });
@@ -571,7 +585,7 @@ bot.on('callback_query', async (query) => {
     // ============ REBOOT ============
     case 'intel_reboot':
       try {
-        await executeSSHOnServer('10.0.0.5', 'sudo reboot');
+        await executeSSHOnServer(SERVERS.intel.ip, 'sudo reboot');
         bot.answerCallbackQuery(query.id, { text: '✅ Server Intel перезагружается...' });
       } catch (err) {
         bot.answerCallbackQuery(query.id, { text: '❌ Ошибка: ' + err.message, show_alert: true });
@@ -579,7 +593,7 @@ bot.on('callback_query', async (query) => {
       break;
     case 'r3_reboot':
       try {
-        await executeSSHOnServer('10.0.0.3', 'sudo reboot');
+        await executeSSHOnServer(SERVERS.r3.ip, 'sudo reboot');
         bot.answerCallbackQuery(query.id, { text: '✅ Server R3 перезагружается...' });
       } catch (err) {
         bot.answerCallbackQuery(query.id, { text: '❌ Ошибка: ' + err.message, show_alert: true });
@@ -587,8 +601,8 @@ bot.on('callback_query', async (query) => {
       break;
     case 'all_reboot':
       try {
-        await executeSSHOnServer('10.0.0.5', 'sudo reboot');
-        await executeSSHOnServer('10.0.0.3', 'sudo reboot');
+        await executeSSHOnServer(SERVERS.intel.ip, 'sudo reboot');
+        await executeSSHOnServer(SERVERS.r3.ip, 'sudo reboot');
         bot.answerCallbackQuery(query.id, { text: '✅ Оба сервера перезагружаются...' });
       } catch (err) {
         bot.answerCallbackQuery(query.id, { text: '❌ Ошибка: ' + err.message, show_alert: true });
@@ -597,75 +611,79 @@ bot.on('callback_query', async (query) => {
 
     // ============ SERVER STATUS ============
     case 'intel_status':
-    case 'r3_status':
-      const statusServer = data === 'intel_status' ? '10.0.0.5' : '10.0.0.3';
-      const statusName = data === 'intel_status' ? 'Server Intel' : 'Server R3';
+    case 'r3_status': {
+      const serverKey = data === 'intel_status' ? 'intel' : 'r3';
+      const srv = SERVERS[serverKey];
       try {
-        const uptime = await executeSSHOnServer(statusServer, 'uptime -p');
-        const mem = await executeSSHOnServer(statusServer, 'free | grep Mem');
+        const uptime = await executeSSHOnServer(srv.ip, 'uptime -p');
+        const mem = await executeSSHOnServer(srv.ip, 'free | grep Mem');
         const memParts = mem.split(/\s+/);
         const memPercent = ((parseInt(memParts[2]) / parseInt(memParts[1])) * 100).toFixed(1);
         bot.answerCallbackQuery(query.id);
-        bot.sendMessage(chatId, `📊 <b>${statusName}</b>\n\n⏱️ ${uptime.trim()}\n💾 RAM: ${memPercent}%`, {
+        bot.sendMessage(chatId, `📊 <b>${srv.name}</b>\n\n⏱️ ${uptime.trim()}\n💾 RAM: ${memPercent}%`, {
           parse_mode: 'HTML',
-          reply_markup: getServerKeyboard(data === 'intel_status' ? 'intel' : 'r3')
+          reply_markup: getServerKeyboard(serverKey)
         });
       } catch (err) {
         bot.answerCallbackQuery(query.id, { text: '❌ Сервер недоступен', show_alert: true });
       }
       break;
+    }
 
     // ============ SERVER DISK ============
     case 'intel_disk':
-    case 'r3_disk':
-      const diskServer = data === 'intel_disk' ? '10.0.0.5' : '10.0.0.3';
-      const diskName = data === 'intel_disk' ? 'Server Intel' : 'Server R3';
+    case 'r3_disk': {
+      const serverKey = data === 'intel_disk' ? 'intel' : 'r3';
+      const srv = SERVERS[serverKey];
       try {
-        const disk = await executeSSHOnServer(diskServer, 'df -h / | tail -1');
+        const disk = await executeSSHOnServer(srv.ip, 'df -h / | tail -1');
         const diskParts = disk.split(/\s+/);
         bot.answerCallbackQuery(query.id);
-        bot.sendMessage(chatId, `💾 <b>${diskName} — Диск</b>\n\nВсего: ${diskParts[1]}\nЗанято: ${diskParts[2]} (${diskParts[4]})\nСвободно: ${diskParts[3]}`, {
+        bot.sendMessage(chatId, `💾 <b>${srv.name} — Диск</b>\n\nВсего: ${diskParts[1]}\nЗанято: ${diskParts[2]} (${diskParts[4]})\nСвободно: ${diskParts[3]}`, {
           parse_mode: 'HTML',
-          reply_markup: getServerKeyboard(data === 'intel_disk' ? 'intel' : 'r3')
+          reply_markup: getServerKeyboard(serverKey)
         });
       } catch (err) {
         bot.answerCallbackQuery(query.id, { text: '❌ Сервер недоступен', show_alert: true });
       }
       break;
+    }
 
     // ============ SERVER PROCESSES ============
     case 'intel_processes':
-    case 'r3_processes':
-      const procServer = data === 'intel_processes' ? '10.0.0.5' : '10.0.0.3';
-      const procName = data === 'intel_processes' ? 'Server Intel' : 'Server R3';
+    case 'r3_processes': {
+      const serverKey = data === 'intel_processes' ? 'intel' : 'r3';
+      const srv = SERVERS[serverKey];
       try {
-        const procs = await executeSSHOnServer(procServer, 'ps aux --sort=-%cpu | head -6');
+        const procs = await executeSSHOnServer(srv.ip, 'ps aux --sort=-%cpu | head -6');
         bot.answerCallbackQuery(query.id);
-        bot.sendMessage(chatId, `⚙️ <b>${procName} — Топ процессов</b>\n\n<pre>${procs}</pre>`, {
+        bot.sendMessage(chatId, `⚙️ <b>${srv.name} — Топ процессов</b>\n\n<pre>${procs}</pre>`, {
           parse_mode: 'HTML',
-          reply_markup: getServerKeyboard(data === 'intel_processes' ? 'intel' : 'r3')
+          reply_markup: getServerKeyboard(serverKey)
         });
       } catch (err) {
         bot.answerCallbackQuery(query.id, { text: '❌ Сервер недоступен', show_alert: true });
       }
       break;
+    }
 
     // ============ SERVER FIREWALL ============
     case 'intel_firewall':
-    case 'r3_firewall':
-      const fwServer = data === 'intel_firewall' ? '10.0.0.5' : '10.0.0.3';
-      const fwName = data === 'intel_firewall' ? 'Server Intel' : 'Server R3';
+    case 'r3_firewall': {
+      const serverKey = data === 'intel_firewall' ? 'intel' : 'r3';
+      const srv = SERVERS[serverKey];
       try {
-        const fw = await executeSSHOnServer(fwServer, 'sudo ufw status numbered 2>/dev/null || echo "UFW not installed"');
+        const fw = await executeSSHOnServer(srv.ip, 'sudo ufw status numbered 2>/dev/null || echo "UFW not installed"');
         bot.answerCallbackQuery(query.id);
-        bot.sendMessage(chatId, `🔥 <b>${fwName} — Firewall</b>\n\n<pre>${fw}</pre>`, {
+        bot.sendMessage(chatId, `🔥 <b>${srv.name} — Firewall</b>\n\n<pre>${fw}</pre>`, {
           parse_mode: 'HTML',
-          reply_markup: getServerKeyboard(data === 'intel_firewall' ? 'intel' : 'r3')
+          reply_markup: getServerKeyboard(serverKey)
         });
       } catch (err) {
         bot.answerCallbackQuery(query.id, { text: '❌ Сервер недоступен', show_alert: true });
       }
       break;
+    }
   }
 });
 
