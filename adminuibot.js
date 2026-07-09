@@ -420,13 +420,26 @@ function getServerKeyboard(server) {
       [{ text: '🔄 Перезагрузка', callback_data: `${server}_reboot` }],
       [
         { text: '💾 Диск', callback_data: `${server}_disk` },
-        { text: '⚙️ Процессы', callback_data: `${server}_processes` }
+        { text: '⚙️ Процессы', callback_data: `${server}_processes_menu` }
       ],
       [
         { text: '🔥 Firewall', callback_data: `${server}_firewall` },
         { text: '📊 Статус', callback_data: `${server}_status` }
       ],
       [{ text: '⬅️ Назад', callback_data: 'menu_home' }]
+    ]
+  };
+}
+
+// Processes submenu
+function getProcessKeyboard(server) {
+  return {
+    inline_keyboard: [
+      [{ text: '📺 Screen сессии', callback_data: `${server}_screen` }],
+      [{ text: '🔧 Systemctl сервисы', callback_data: `${server}_systemctl` }],
+      [{ text: '🚀 PM2', callback_data: `${server}_pm2` }],
+      [{ text: '⚙️ Процессы (top)', callback_data: `${server}_processes` }],
+      [{ text: '⬅️ Назад', callback_data: `home_${server}` }]
     ]
   };
 }
@@ -622,7 +635,7 @@ bot.on('callback_query', async (query) => {
       const srv = SERVERS[serverKey];
       try {
         const uptime = await executeSSHOnServer(srv.ip, 'uptime -p');
-        const mem = await executeSSHOnServer(srv.ip, 'free | grep Mem');
+        const mem = await executeSSHOnServer(srv.ip, 'LANG=C free | grep Mem');
         const memParts = mem.split(/\s+/);
         const memPercent = ((parseInt(memParts[2]) / parseInt(memParts[1])) * 100).toFixed(1);
         bot.sendMessage(chatId, `📊 <b>${srv.name}</b>\n\n⏱️ ${uptime.trim()}\n💾 RAM: ${memPercent}%`, {
@@ -670,13 +683,78 @@ bot.on('callback_query', async (query) => {
       break;
     }
 
+    // ============ PROCESSES MENU ============
+    case 'intel_processes_menu':
+    case 'r3_processes_menu': {
+      const serverKey = data === 'intel_processes_menu' ? 'intel' : 'r3';
+      const srv = SERVERS[serverKey];
+      bot.editMessageText(`⚙️ <b>${srv.name} — Процессы</b>`, {
+        chat_id: chatId,
+        message_id: query.message.message_id,
+        parse_mode: 'HTML',
+        reply_markup: getProcessKeyboard(serverKey)
+      });
+      break;
+    }
+
+    // ============ SCREEN SESSIONS ============
+    case 'intel_screen':
+    case 'r3_screen': {
+      const serverKey = data === 'intel_screen' ? 'intel' : 'r3';
+      const srv = SERVERS[serverKey];
+      try {
+        const screen = await executeSSHOnServer(srv.ip, 'screen -ls 2>/dev/null || echo "Screen not installed"');
+        bot.sendMessage(chatId, `📺 <b>${srv.name} — Screen сессии</b>\n\n<pre>${screen}</pre>`, {
+          parse_mode: 'HTML',
+          reply_markup: getProcessKeyboard(serverKey)
+        });
+      } catch (err) {
+        bot.sendMessage(chatId, '❌ Сервер недоступен');
+      }
+      break;
+    }
+
+    // ============ SYSTEMCTL SERVICES ============
+    case 'intel_systemctl':
+    case 'r3_systemctl': {
+      const serverKey = data === 'intel_systemctl' ? 'intel' : 'r3';
+      const srv = SERVERS[serverKey];
+      try {
+        const systemctl = await executeSSHOnServer(srv.ip, 'systemctl list-units --type=service --state=running --no-pager | head -15');
+        bot.sendMessage(chatId, `🔧 <b>${srv.name} — Systemctl сервисы</b>\n\n<pre>${systemctl}</pre>`, {
+          parse_mode: 'HTML',
+          reply_markup: getProcessKeyboard(serverKey)
+        });
+      } catch (err) {
+        bot.sendMessage(chatId, '❌ Сервер недоступен');
+      }
+      break;
+    }
+
+    // ============ PM2 ON SERVER ============
+    case 'intel_pm2':
+    case 'r3_pm2': {
+      const serverKey = data === 'intel_pm2' ? 'intel' : 'r3';
+      const srv = SERVERS[serverKey];
+      try {
+        const pm2 = await executeSSHOnServer(srv.ip, 'pm2 list 2>/dev/null || echo "PM2 not installed"');
+        bot.sendMessage(chatId, `🚀 <b>${srv.name} — PM2</b>\n\n<pre>${pm2}</pre>`, {
+          parse_mode: 'HTML',
+          reply_markup: getProcessKeyboard(serverKey)
+        });
+      } catch (err) {
+        bot.sendMessage(chatId, '❌ Сервер недоступен');
+      }
+      break;
+    }
+
     // ============ SERVER FIREWALL ============
     case 'intel_firewall':
     case 'r3_firewall': {
       const serverKey = data === 'intel_firewall' ? 'intel' : 'r3';
       const srv = SERVERS[serverKey];
       try {
-        const fw = await executeSSHOnServer(srv.ip, 'sudo ufw status numbered 2>/dev/null || echo "UFW not installed"');
+        const fw = await executeSSHOnServer(srv.ip, 'echo "88005553535" | sudo -S ufw status numbered 2>/dev/null || echo "UFW not installed"');
         bot.sendMessage(chatId, `🔥 <b>${srv.name} — Firewall</b>\n\n<pre>${fw}</pre>`, {
           parse_mode: 'HTML',
           reply_markup: getServerKeyboard(serverKey)
