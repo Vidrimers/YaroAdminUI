@@ -306,15 +306,30 @@ function executeSSHOnServer(host, command) {
 // SSH to Windows PC (10.0.0.2) via VPS → router tunnel
 // Uses powershell -EncodedCommand with base64 to bypass shell escaping
 async function executeSSHOnWindows(command) {
-  // Encode PowerShell command as UTF-16LE base64
   const b64 = Buffer.from(command, 'utf16le').toString('base64');
   const fullCmd = `ssh -o StrictHostKeyChecking=no -i /root/.ssh/vps_to_local -p 2222 root@127.0.0.1 'dbclient -y -i /root/.ssh/router_to_vps vidri@10.0.0.2 powershell -EncodedCommand ${b64}'`;
   const { stdout } = await execAsync(fullCmd);
-  // Strip CLIXML wrapper if present
   let output = stdout;
-  if (output.includes('#< CLIXML')) {
-    const lines = output.split('\n').filter(l => l.trim() && !l.includes('CLIXML') && !l.includes('<Obj') && !l.includes('</Obj') && !l.includes('<TN') && !l.includes('<MS') && !l.includes('<PR') && !l.includes('<AV') && !l.includes('<AI') && !l.includes('<PI') && !l.includes('<PC') && !l.includes('<T>') && !l.includes('<SR') && !l.includes('<SD'));
-    output = lines.join('\n').trim();
+  // Strip CLIXML wrapper and progress messages
+  if (output.includes('CLIXML') || output.includes('<Obj')) {
+    const clean = [];
+    for (const line of output.split('\n')) {
+      const t = line.trim();
+      if (!t) continue;
+      if (t.startsWith('#<') || t.startsWith('<Obj') || t.startsWith('</Obj') ||
+          t.startsWith('<TN') || t.startsWith('<MS') || t.startsWith('<PR') ||
+          t.startsWith('<AV') || t.startsWith('<AI') || t.startsWith('<PI') ||
+          t.startsWith('<PC') || t.startsWith('<T>') || t.startsWith('<SR') ||
+          t.startsWith('<SD') || t.startsWith('<I64') || t.startsWith('<Nil') ||
+          t.startsWith('<TNRef')) continue;
+      if (t.startsWith('<S ')) {
+        const m = t.match(/>([^<]+)</);
+        if (m) clean.push(m[1].trim());
+        continue;
+      }
+      if (!t.startsWith('<')) clean.push(t);
+    }
+    output = clean.join('\n').trim();
   }
   return output;
 }
@@ -817,24 +832,12 @@ bot.on('callback_query', async (query) => {
 
     case 'b650_disk':
       try {
-        const drives = await executeSSHOnWindows('powershell -Command Get-PSDrive -PSProvider FileSystem | Select Name,Used,Free');
-        let msg = `💾 <b>dmd-b650 — Диски</b>\n\n`;
-        const lines = drives.split('\n').filter(l => l.trim() && !l.includes('Name'));
-        for (const line of lines) {
-          const parts = line.trim().split(/\s+/);
-          if (parts.length >= 3) {
-            const dName = parts[0];
-            const used = parseInt(parts[1]);
-            const free = parseInt(parts[2]);
-            if (!isNaN(used) && !isNaN(free)) {
-              const usedGB = (used / 1073741824).toFixed(1);
-              const freeGB = (free / 1073741824).toFixed(1);
-              const totalGB = ((used + free) / 1073741824).toFixed(1);
-              msg += `💿 <b>${dName}:</b> ${usedGB} / ${totalGB} GB (${freeGB} GB свободно)\n`;
-            }
-          }
-        }
-        bot.sendMessage(chatId, msg, {
+        const used = await executeSSHOnWindows('powershell -Command (Get-PSDrive C).Used');
+        const free = await executeSSHOnWindows('powershell -Command (Get-PSDrive C).Free');
+        const usedGB = (parseInt(used.trim()) / 1073741824).toFixed(1);
+        const freeGB = (parseInt(free.trim()) / 1073741824).toFixed(1);
+        const totalGB = ((parseInt(used.trim()) + parseInt(free.trim())) / 1073741824).toFixed(1);
+        bot.sendMessage(chatId, `💾 <b>dmd-b650 — Диск C:</b>\n\nВсего: ${totalGB} GB\nЗанято: ${usedGB} GB\nСвободно: ${freeGB} GB`, {
           parse_mode: 'HTML',
           reply_markup: getB650Keyboard()
         });
