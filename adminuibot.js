@@ -620,7 +620,7 @@ bot.on('callback_query', async (query) => {
 
     case 'b650_status':
       try {
-        const bootStr = await executeSSHOnWindows('powershell -Command (Get-CimInstance Win32_OperatingSystem).LastBootUpTime.ToString');
+        const bootStr = await executeSSHOnWindows('powershell -Command (Get-CimInstance Win32_OperatingSystem).LastBootUpTime');
         const bootTime = new Date(bootStr.trim());
         const now = new Date();
         const diff = now - bootTime;
