@@ -620,7 +620,7 @@ bot.on('callback_query', async (query) => {
 
     case 'b650_status':
       try {
-        const uptime = await executeSSHOnWindows('powershell -Command (Get-CimInstance Win32_OperatingSystem).LastBootUpTime.ToString()');
+        const uptime = await executeSSHOnWindows('powershell -Command "{0}" -f (Get-CimInstance Win32_OperatingSystem).LastBootUpTime');
         const mem = await executeSSHOnWindows('powershell -Command (Get-CimInstance Win32_OperatingSystem).FreePhysicalMemory');
         const total = await executeSSHOnWindows('powershell -Command (Get-CimInstance Win32_OperatingSystem).TotalVisibleMemorySize');
         const memPercent = ((parseInt(total.trim()) - parseInt(mem.trim())) / parseInt(total.trim()) * 100).toFixed(1);
