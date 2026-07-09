@@ -613,6 +613,7 @@ bot.on('callback_query', async (query) => {
         console.log(`[WoL] Sending broadcast for dmd-b650 ${SERVERS.b650.mac}`);
         await execAsync(`ssh -o StrictHostKeyChecking=no -i /root/.ssh/vps_to_local -p 2222 root@127.0.0.1 "wakeonlan -i 10.0.0.255 ${SERVERS.b650.mac}"`);
         bot.sendMessage(chatId, '✅ Сигнал WoL отправлен на dmd-b650');
+        pollServerOnline(chatId, SERVERS.b650.ip, 'dmd-b650');
       } catch (err) {
         console.error(`[WoL] Error:`, err);
         bot.sendMessage(chatId, '❌ Ошибка: ' + err.message);
