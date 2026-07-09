@@ -522,6 +522,7 @@ function getB650NetKeyboard(autoRestart) {
       [{ text: '🔄 Перезапуск адаптера', callback_data: 'b650_net_restart' }],
       [{ text: '📡 Статус адаптера', callback_data: 'b650_net_status' }],
       [{ text: '🌍 Проверка интернета', callback_data: 'b650_net_check' }],
+      [{ text: '📋 Отчёт', callback_data: 'b650_net_report' }],
       [{ text: '⬅️ Назад', callback_data: 'home_b650' }]
     ]
   };
@@ -561,18 +562,17 @@ function pollServerOnline(chatId, ip, name, attempts = 0) {
   }, 10000);
 }
 
-// Auto-restart state for b650 network adapter
-const B650_AUTORESTART_FILE = '/tmp/b650_autorestart.json';
+// Auto-restart state for b650 network adapter (stored on Windows)
 async function getB650AutoRestart() {
   try {
-    const { stdout } = await execAsync(`cat ${B650_AUTORESTART_FILE} 2>/dev/null || echo '{"enabled":false}'`);
-    return JSON.parse(stdout.trim());
+    const result = await executeSSHOnWindows('if (Test-Path C:\\NetworkLogs\\auto_restart_enabled.txt) { Get-Content C:\\NetworkLogs\\auto_restart_enabled.txt } else { echo "false" }');
+    return { enabled: result.trim().toLowerCase() === 'true' };
   } catch {
     return { enabled: false };
   }
 }
 async function setB650AutoRestart(enabled) {
-  await execAsync(`echo '{"enabled":${enabled}}' > ${B650_AUTORESTART_FILE}`);
+  await executeSSHOnWindows(`echo ${enabled} > C:\\NetworkLogs\\auto_restart_enabled.txt`);
 }
 
 // ============ CALLBACK QUERY HANDLER ============
@@ -778,6 +778,18 @@ bot.on('callback_query', async (query) => {
         await executeSSHOnWindows('Start-Process powershell -ArgumentList "-Command Disable-NetAdapter RustyBunker -Confirm:0; Start-Sleep 5; Enable-NetAdapter RustyBunker -Confirm:0"');
         bot.sendMessage(chatId, '🔄 Адаптер RustyBunker перезапущен (5 сек задержка)', {
           reply_markup: getB650NetKeyboard((await getB650AutoRestart()).enabled)
+        });
+      } catch (err) {
+        bot.sendMessage(chatId, '❌ Ошибка: ' + err.message);
+      }
+      break;
+
+    case 'b650_net_report':
+      try {
+        // Copy report from Windows to VPS, then send
+        await execAsync('ssh -o StrictHostKeyChecking=no -i /root/.ssh/vps_to_local -p 2222 root@127.0.0.1 "dbclient -y -i /root/.ssh/router_to_vps vidri@10.0.0.2 cat C:/NetworkLogs/network_report.html" > /tmp/b650_report.html');
+        bot.sendDocument(chatId, '/tmp/b650_report.html', {
+          caption: '📋 Network Log — dmd-b650'
         });
       } catch (err) {
         bot.sendMessage(chatId, '❌ Ошибка: ' + err.message);
