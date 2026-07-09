@@ -551,25 +551,35 @@ bot.on('callback_query', async (query) => {
     // ============ WAKE ON LAN ============
     case 'intel_wake':
       try {
-        await execAsync(`wakeonlan -i ${SERVERS.intel.ip} ${SERVERS.intel.mac}`);
+        console.log(`[WoL] Sending to ${SERVERS.intel.ip} ${SERVERS.intel.mac}`);
+        const wolResult = await execAsync(`wakeonlan -i ${SERVERS.intel.ip} ${SERVERS.intel.mac}`);
+        console.log(`[WoL] Result: ${wolResult.stdout}`);
         bot.sendMessage(chatId, '✅ Сигнал WoL отправлен на Server Intel');
       } catch (err) {
+        console.error(`[WoL] Error:`, err);
         bot.sendMessage(chatId, '❌ Ошибка: ' + err.message);
       }
       break;
     case 'r3_wake':
       try {
-        await execAsync(`wakeonlan -i ${SERVERS.r3.ip} ${SERVERS.r3.mac}`);
+        console.log(`[WoL] Sending to ${SERVERS.r3.ip} ${SERVERS.r3.mac}`);
+        const wolResult = await execAsync(`wakeonlan -i ${SERVERS.r3.ip} ${SERVERS.r3.mac}`);
+        console.log(`[WoL] Result: ${wolResult.stdout}`);
         bot.sendMessage(chatId, '✅ Сигнал WoL отправлен на Server R3');
       } catch (err) {
+        console.error(`[WoL] Error:`, err);
         bot.sendMessage(chatId, '❌ Ошибка: ' + err.message);
       }
       break;
     case 'all_wake':
       try {
-        await execAsync(`wakeonlan -i ${SERVERS.intel.ip} ${SERVERS.intel.mac} && wakeonlan -i ${SERVERS.r3.ip} ${SERVERS.r3.mac}`);
+        console.log(`[WoL] Sending to both servers`);
+        await execAsync(`wakeonlan -i ${SERVERS.intel.ip} ${SERVERS.intel.mac}`);
+        await execAsync(`wakeonlan -i ${SERVERS.r3.ip} ${SERVERS.r3.mac}`);
+        console.log(`[WoL] Both sent`);
         bot.sendMessage(chatId, '✅ Сигнал WoL отправлен на оба сервера');
       } catch (err) {
+        console.error(`[WoL] Error:`, err);
         bot.sendMessage(chatId, '❌ Ошибка: ' + err.message);
       }
       break;
