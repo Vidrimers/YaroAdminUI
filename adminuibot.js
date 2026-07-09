@@ -297,43 +297,102 @@ function callAdminUI(endpoint, method = "GET") {
   });
 }
 
-// Function to get main keyboard
-function getMainKeyboard() {
+// Function to get main inline keyboard for /menu
+function getMenuInlineKeyboard() {
   return {
-    keyboard: [
-      [{ text: '🔑 Получить код' }, { text: '📊 Статус сервера' }],
-      [{ text: '⚙️ Процессы' }, { text: '🔥 Firewall' }],
-      [{ text: '🚀 PM2' }, { text: '🔧 Другие процессы' }],
-      [{ text: '💾 Диск' }, { text: '❓ Помощь' }]
-    ],
-    resize_keyboard: true,
-    one_time_keyboard: false
+    inline_keyboard: [
+      [
+        { text: '🔑 Получить код', callback_data: 'menu_auth_code' },
+        { text: '📊 Статус сервера', callback_data: 'menu_status' }
+      ],
+      [
+        { text: '⚙️ Процессы', callback_data: 'menu_processes' },
+        { text: '🔥 Firewall', callback_data: 'menu_firewall' }
+      ],
+      [
+        { text: '🚀 PM2', callback_data: 'menu_pm2' },
+        { text: '🔧 Другие процессы', callback_data: 'menu_other' }
+      ],
+      [
+        { text: '💾 Диск', callback_data: 'menu_disk' },
+        { text: '❓ Помощь', callback_data: 'menu_help' }
+      ]
+    ]
   };
 }
+
+// ============ /menu COMMAND ============
+bot.onText(/\/menu/, (msg) => {
+  const chatId = msg.chat.id;
+  const userId = msg.from.id;
+
+  if (!isAdmin(userId)) {
+    bot.sendMessage(chatId, '❌ Доступ запрещен!');
+    return;
+  }
+
+  bot.sendMessage(chatId, '📋 <b>Меню управления:</b>', {
+    parse_mode: 'HTML',
+    reply_markup: getMenuInlineKeyboard()
+  });
+});
+
+// ============ CALLBACK QUERY HANDLER ============
+bot.on('callback_query', async (query) => {
+  const chatId = query.message.chat.id;
+  const userId = query.from.id;
+  const data = query.data;
+
+  if (!isAdmin(userId)) {
+    bot.answerCallbackQuery(query.id, { text: '❌ Доступ запрещен!' });
+    return;
+  }
+
+  // Answer callback to remove loading state
+  bot.answerCallbackQuery(query.id);
+
+  // Route to appropriate handler
+  switch (data) {
+    case 'menu_auth_code':
+      // Trigger auth_code logic
+      bot.emit('message', { chat: { id: chatId }, from: { id: userId }, text: '/auth_code' });
+      break;
+    case 'menu_status':
+      bot.emit('message', { chat: { id: chatId }, from: { id: userId }, text: '/status' });
+      break;
+    case 'menu_processes':
+      bot.emit('message', { chat: { id: chatId }, from: { id: userId }, text: '/processes' });
+      break;
+    case 'menu_firewall':
+      bot.emit('message', { chat: { id: chatId }, from: { id: userId }, text: '/firewall' });
+      break;
+    case 'menu_pm2':
+      bot.emit('message', { chat: { id: chatId }, from: { id: userId }, text: '/pm2' });
+      break;
+    case 'menu_other':
+      bot.emit('message', { chat: { id: chatId }, from: { id: userId }, text: '/other_processes' });
+      break;
+    case 'menu_disk':
+      bot.emit('message', { chat: { id: chatId }, from: { id: userId }, text: '/disk' });
+      break;
+    case 'menu_help':
+      bot.emit('message', { chat: { id: chatId }, from: { id: userId }, text: '/help' });
+      break;
+  }
+});
 
 bot.on("message", async (msg) => {
   const chatId = msg.chat.id;
   const userId = msg.from.id;
   const text = msg.text;
 
-  // Создаем клавиатуру с кнопками
-  const mainKeyboard = getMainKeyboard();
-
-  if (text === "/start" || text === "🏠 Главная") {
+  if (text === "/start") {
     bot.sendMessage(
       chatId,
       `🎉 Добро пожаловать в YaroAdminUI Bot!\n\n` +
         `Ваш ID: ${userId}\n\n` +
-        `📋 Используйте кнопки ниже для управления сервером:\n\n` +
-        `🔑 Получить код - Код для входа в админ-панель\n` +
-        `📊 Статус сервера - Информация о сервере\n` +
-        `⚙️ Процессы - Топ 10 процессов по загруженности\n` +
-        `🚀 PM2 - PM2 процессы и управление\n` +
-        `📺 Screen - Screen сессии и управление\n` +
-        `🔥 Firewall - Управление портами\n` +
-        `💾 Диск - Информация о дисках\n` +
-        `❓ Помощь - Справка по командам`,
-      { reply_markup: mainKeyboard }
+        `📋 Введите /menu для открытия меню управления.`,
+      { reply_markup: getMenuInlineKeyboard() }
     );
   } else if (text === "/auth_code" || text === "🔑 Получить код") {
     // Проверка что пользователь является админом
@@ -994,7 +1053,7 @@ bot.on("message", async (msg) => {
         
         if (!port.match(/^\d+$/)) {
           bot.sendMessage(chatId, "❌ Неверный формат. Введите только номер порта (например: 8080)", {
-            reply_markup: getMainKeyboard()
+            reply_markup: getMenuInlineKeyboard()
           });
           userStates.delete(userId);
           return;
@@ -1011,11 +1070,11 @@ bot.on("message", async (msg) => {
             sudo ufw allow ${port}
           `.replace(/\n/g, ' '));
           bot.sendMessage(chatId, `✅ Порт ${port} успешно открыт в firewall`, {
-            reply_markup: getMainKeyboard()
+            reply_markup: getMenuInlineKeyboard()
           });
         } catch (error) {
           bot.sendMessage(chatId, `❌ Ошибка: ${error.message}`, {
-            reply_markup: getMainKeyboard()
+            reply_markup: getMenuInlineKeyboard()
           });
         }
         return;
@@ -1024,7 +1083,7 @@ bot.on("message", async (msg) => {
         
         if (!port.match(/^\d+$/)) {
           bot.sendMessage(chatId, "❌ Неверный формат. Введите только номер порта (например: 8080)", {
-            reply_markup: getMainKeyboard()
+            reply_markup: getMenuInlineKeyboard()
           });
           userStates.delete(userId);
           return;
@@ -1041,11 +1100,11 @@ bot.on("message", async (msg) => {
             sudo ufw deny ${port}
           `.replace(/\n/g, ' '));
           bot.sendMessage(chatId, `✅ Порт ${port} успешно закрыт в firewall`, {
-            reply_markup: getMainKeyboard()
+            reply_markup: getMenuInlineKeyboard()
           });
         } catch (error) {
           bot.sendMessage(chatId, `❌ Ошибка: ${error.message}`, {
-            reply_markup: getMainKeyboard()
+            reply_markup: getMenuInlineKeyboard()
           });
         }
         return;
@@ -1054,7 +1113,7 @@ bot.on("message", async (msg) => {
         
         if (!port.match(/^\d+$/)) {
           bot.sendMessage(chatId, "❌ Неверный формат. Введите только номер порта (например: 8080)", {
-            reply_markup: getMainKeyboard()
+            reply_markup: getMenuInlineKeyboard()
           });
           userStates.delete(userId);
           return;
@@ -1073,11 +1132,11 @@ bot.on("message", async (msg) => {
             sudo ufw delete deny ${port}/udp 2>/dev/null || true
           `.replace(/\n/g, ' '));
           bot.sendMessage(chatId, `✅ Все правила для порта ${port} удалены из firewall`, {
-            reply_markup: getMainKeyboard()
+            reply_markup: getMenuInlineKeyboard()
           });
         } catch (error) {
           bot.sendMessage(chatId, `❌ Ошибка: ${error.message}`, {
-            reply_markup: getMainKeyboard()
+            reply_markup: getMenuInlineKeyboard()
           });
         }
         return;
@@ -1087,7 +1146,7 @@ bot.on("message", async (msg) => {
         
         if (!lines.match(/^\d+$/)) {
           bot.sendMessage(chatId, "❌ Неверный формат. Введите только число (например: 75)", {
-            reply_markup: getMainKeyboard()
+            reply_markup: getMenuInlineKeyboard()
           });
           userStates.delete(userId);
           return;
@@ -1112,12 +1171,12 @@ bot.on("message", async (msg) => {
             `📋 <b>Логи процесса ${processName}</b> (последние ${lines} строк):\n\n<pre>${escapeHtml(truncatedOutput)}</pre>`,
             { 
               parse_mode: 'HTML',
-              reply_markup: getMainKeyboard()
+              reply_markup: getMenuInlineKeyboard()
             }
           );
         } catch (error) {
           bot.sendMessage(chatId, `❌ Ошибка получения логов: ${error.message}`, {
-            reply_markup: getMainKeyboard()
+            reply_markup: getMenuInlineKeyboard()
           });
         }
         return;
@@ -1449,7 +1508,7 @@ bot.on('callback_query', async (query) => {
       
       bot.sendMessage(chatId, response, { 
         parse_mode: "HTML",
-        reply_markup: getMainKeyboard()
+        reply_markup: getMenuInlineKeyboard()
       });
     } catch (error) {
       bot.sendMessage(chatId, `❌ Ошибка при получении PM2 процессов: ${error.message}`);
@@ -1662,11 +1721,11 @@ bot.on('callback_query', async (query) => {
 
         bot.sendMessage(chatId, `✅ Деплой завершён!\n\n<code>${escapeHtml(deployOutput.substring(0, 3000))}</code>`, {
           parse_mode: 'HTML',
-          reply_markup: getMainKeyboard()
+          reply_markup: getMenuInlineKeyboard()
         });
       } catch (error) {
         bot.sendMessage(chatId, `❌ Ошибка деплоя: ${error.message}`, {
-          reply_markup: getMainKeyboard()
+          reply_markup: getMenuInlineKeyboard()
         });
       }
       return;
@@ -1681,10 +1740,10 @@ bot.on('callback_query', async (query) => {
         await executeSSHCommand('pm2 restart watchrebel-telegram');
         bot.sendMessage(chatId, `✅ ${processName} обновлён и перезапущен!\n\n<code>${escapeHtml(pullOutput.substring(0, 3000))}</code>`, {
           parse_mode: 'HTML',
-          reply_markup: getMainKeyboard()
+          reply_markup: getMenuInlineKeyboard()
         });
       } catch (error) {
-        bot.sendMessage(chatId, `❌ Ошибка деплоя: ${error.message}`, { reply_markup: getMainKeyboard() });
+        bot.sendMessage(chatId, `❌ Ошибка деплоя: ${error.message}`, { reply_markup: getMenuInlineKeyboard() });
       }
       return;
     }
@@ -1698,10 +1757,10 @@ bot.on('callback_query', async (query) => {
         await executeSSHCommand('pm2 restart watchrebel-server');
         bot.sendMessage(chatId, `✅ ${processName} обновлён и перезапущен!\n\n📥 Pull:\n<code>${escapeHtml(pullOutput.substring(0, 1500))}</code>\n\n🔨 Build:\n<code>${escapeHtml(buildOutput.substring(0, 1500))}</code>`, {
           parse_mode: 'HTML',
-          reply_markup: getMainKeyboard()
+          reply_markup: getMenuInlineKeyboard()
         });
       } catch (error) {
-        bot.sendMessage(chatId, `❌ Ошибка деплоя: ${error.message}`, { reply_markup: getMainKeyboard() });
+        bot.sendMessage(chatId, `❌ Ошибка деплоя: ${error.message}`, { reply_markup: getMenuInlineKeyboard() });
       }
       return;
     }
@@ -1745,7 +1804,7 @@ bot.on('callback_query', async (query) => {
       
       if (!workDir) {
         bot.sendMessage(chatId, `❌ Не удалось определить рабочую директорию для процесса ${processName}`, {
-          reply_markup: getMainKeyboard()
+          reply_markup: getMenuInlineKeyboard()
         });
         return;
       }
@@ -1778,12 +1837,12 @@ bot.on('callback_query', async (query) => {
       );
       
       bot.sendMessage(chatId, `✅ Процесс ${processName} успешно обновлен и перезапущен!`, {
-        reply_markup: getMainKeyboard()
+        reply_markup: getMenuInlineKeyboard()
       });
       
     } catch (error) {
       bot.sendMessage(chatId, `❌ Ошибка при обновлении: ${error.message}`, {
-        reply_markup: getMainKeyboard()
+        reply_markup: getMenuInlineKeyboard()
       });
     }
   } else if (data.startsWith('pm2_restart_')) {
@@ -1796,7 +1855,7 @@ bot.on('callback_query', async (query) => {
           `export PATH=$PATH:/usr/local/bin:/usr/bin:~/.npm-global/bin:~/.nvm/versions/node/*/bin && pm2 restart all`
         );
         bot.sendMessage(chatId, `✅ Все PM2 процессы перезапущены`, {
-          reply_markup: getMainKeyboard()
+          reply_markup: getMenuInlineKeyboard()
         });
       } else {
         bot.sendMessage(chatId, `🔄 Перезапускаю процесс ${processName}...`);
@@ -1804,12 +1863,12 @@ bot.on('callback_query', async (query) => {
           `export PATH=$PATH:/usr/local/bin:/usr/bin:~/.npm-global/bin:~/.nvm/versions/node/*/bin && pm2 restart ${processName}`
         );
         bot.sendMessage(chatId, `✅ Процесс ${processName} перезапущен`, {
-          reply_markup: getMainKeyboard()
+          reply_markup: getMenuInlineKeyboard()
         });
       }
     } catch (error) {
       bot.sendMessage(chatId, `❌ Ошибка перезапуска: ${error.message}`, {
-        reply_markup: getMainKeyboard()
+        reply_markup: getMenuInlineKeyboard()
       });
     }
   } else if (data.startsWith('pm2_stop_')) {
@@ -1822,7 +1881,7 @@ bot.on('callback_query', async (query) => {
           `export PATH=$PATH:/usr/local/bin:/usr/bin:~/.npm-global/bin:~/.nvm/versions/node/*/bin && pm2 stop all`
         );
         bot.sendMessage(chatId, `✅ Все PM2 процессы остановлены`, {
-          reply_markup: getMainKeyboard()
+          reply_markup: getMenuInlineKeyboard()
         });
       } else {
         bot.sendMessage(chatId, `⏹️ Останавливаю процесс ${processName}...`);
@@ -1830,12 +1889,12 @@ bot.on('callback_query', async (query) => {
           `export PATH=$PATH:/usr/local/bin:/usr/bin:~/.npm-global/bin:~/.nvm/versions/node/*/bin && pm2 stop ${processName}`
         );
         bot.sendMessage(chatId, `✅ Процесс ${processName} остановлен`, {
-          reply_markup: getMainKeyboard()
+          reply_markup: getMenuInlineKeyboard()
         });
       }
     } catch (error) {
       bot.sendMessage(chatId, `❌ Ошибка остановки: ${error.message}`, {
-        reply_markup: getMainKeyboard()
+        reply_markup: getMenuInlineKeyboard()
       });
     }
   } else if (data.startsWith('pm2_start_')) {
@@ -1848,7 +1907,7 @@ bot.on('callback_query', async (query) => {
           `export PATH=$PATH:/usr/local/bin:/usr/bin:~/.npm-global/bin:~/.nvm/versions/node/*/bin && pm2 start all`
         );
         bot.sendMessage(chatId, `✅ Все PM2 процессы запущены`, {
-          reply_markup: getMainKeyboard()
+          reply_markup: getMenuInlineKeyboard()
         });
       } else {
         bot.sendMessage(chatId, `▶️ Запускаю процесс ${processName}...`);
@@ -1856,12 +1915,12 @@ bot.on('callback_query', async (query) => {
           `export PATH=$PATH:/usr/local/bin:/usr/bin:~/.npm-global/bin:~/.nvm/versions/node/*/bin && pm2 start ${processName}`
         );
         bot.sendMessage(chatId, `✅ Процесс ${processName} запущен`, {
-          reply_markup: getMainKeyboard()
+          reply_markup: getMenuInlineKeyboard()
         });
       }
     } catch (error) {
       bot.sendMessage(chatId, `❌ Ошибка запуска: ${error.message}`, {
-        reply_markup: getMainKeyboard()
+        reply_markup: getMenuInlineKeyboard()
       });
     }
   } else if (data.startsWith('pm2_log_')) {
@@ -1946,12 +2005,12 @@ bot.on('callback_query', async (query) => {
           `📋 <b>Логи процесса ${processName}</b> (последние ${lineCount} строк):\n\n<pre>${escapeHtml(truncatedOutput)}</pre>`,
           { 
             parse_mode: 'HTML',
-            reply_markup: getMainKeyboard()
+            reply_markup: getMenuInlineKeyboard()
           }
         );
       } catch (error) {
         bot.sendMessage(chatId, `❌ Ошибка получения логов: ${error.message}`, {
-          reply_markup: getMainKeyboard()
+          reply_markup: getMenuInlineKeyboard()
         });
       }
     }
@@ -1988,13 +2047,13 @@ bot.on('callback_query', async (query) => {
         `✅ Результат выполнения:\n\n<pre>${escapeHtml(truncatedOutput) || 'Команда выполнена успешно (нет вывода)'}</pre>`,
         { 
           parse_mode: 'HTML',
-          reply_markup: getMainKeyboard()
+          reply_markup: getMenuInlineKeyboard()
         }
       );
     } catch (error) {
       console.error('Error executing command:', error);
       bot.sendMessage(chatId, `❌ Ошибка выполнения: ${error.message}`, {
-        reply_markup: getMainKeyboard()
+        reply_markup: getMenuInlineKeyboard()
       });
     }
   }
