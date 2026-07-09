@@ -110,7 +110,35 @@ async function initBot() {
 
   bot = new TelegramBot(TELEGRAM_BOT_TOKEN, { polling: true });
   db = new DB(DB_PATH);
-  
+
+  // Set menu button next to attachment button
+  try {
+    await bot.setChatMenuButton(null, {
+      menu_button: { type: 'commands' }
+    });
+    console.log('[BOT] Menu button set to show commands');
+  } catch (err) {
+    console.log('[BOT] Menu button setup failed:', err.message);
+  }
+
+  // Set bot commands for the menu
+  try {
+    await bot.setMyCommands([
+      { command: 'menu', description: 'Открыть меню управления' },
+      { command: 'start', description: 'Начать работу с ботом' },
+      { command: 'auth_code', description: 'Получить код для входа' },
+      { command: 'status', description: 'Статус сервера' },
+      { command: 'processes', description: 'Топ процессов' },
+      { command: 'pm2', description: 'PM2 процессы' },
+      { command: 'firewall', description: 'Управление портами' },
+      { command: 'disk', description: 'Информация о дисках' },
+      { command: 'help', description: 'Справка по командам' }
+    ]);
+    console.log('[BOT] Bot commands set');
+  } catch (err) {
+    console.log('[BOT] Commands setup failed:', err.message);
+  }
+
   setupBotHandlers();
 }
 
