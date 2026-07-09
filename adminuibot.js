@@ -680,7 +680,12 @@ bot.on('callback_query', async (query) => {
         await executeSSHOnWindows('shutdown /a');
         bot.sendMessage(chatId, '❌ Выключение отменено');
       } catch (err) {
-        bot.sendMessage(chatId, '❌ Ошибка: ' + err.message);
+        // shutdown /a fails if no shutdown in progress — that's OK
+        if (err.message.includes('1116')) {
+          bot.sendMessage(chatId, 'ℹ️ Нет запланированного выключения');
+        } else {
+          bot.sendMessage(chatId, '❌ Ошибка: ' + err.message);
+        }
       }
       break;
 
@@ -722,9 +727,9 @@ bot.on('callback_query', async (query) => {
 
     case 'b650_net_restart':
       try {
-        await executeSSHOnWindows('powershell -Command Disable-NetAdapter RustyBunker -Confirm:$false');
+        await executeSSHOnWindows('powershell -Command Disable-NetAdapter RustyBunker -Confirm:0');
         await new Promise(r => setTimeout(r, 2000));
-        await executeSSHOnWindows('powershell -Command Enable-NetAdapter RustyBunker -Confirm:$false');
+        await executeSSHOnWindows('powershell -Command Enable-NetAdapter RustyBunker -Confirm:0');
         bot.sendMessage(chatId, '🔄 Адаптер RustyBunker перезапущен', {
           reply_markup: getB650NetKeyboard()
         });
