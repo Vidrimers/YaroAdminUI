@@ -445,6 +445,8 @@ bot.on('callback_query', async (query) => {
   const userId = query.from.id;
   const data = query.data;
 
+  console.log(`[CALLBACK] data=${data} userId=${userId} chatId=${chatId}`);
+
   if (!isAdmin(userId)) {
     bot.answerCallbackQuery(query.id, { text: '❌ Доступ запрещен!' });
     return;
@@ -1511,24 +1513,24 @@ bot.on("message", async (msg) => {
   }
 });
 
-// Handle callback queries from inline buttons
+// Handle callback queries from inline buttons (fw, other, pm2)
 bot.on('callback_query', async (query) => {
   const chatId = query.message.chat.id;
   const userId = query.from.id;
   const data = query.data;
-  
+
+  // Skip if already handled by first callback handler (menu, home, server)
+  if (!data.startsWith('fw_') && !data.startsWith('other_') && !data.startsWith('pm2_')) return;
+
   // Check admin access
   if (!isAdmin(userId)) {
-    bot.answerCallbackQuery(query.id, {
-      text: '❌ Доступ запрещен!',
-      show_alert: true
-    });
+    bot.answerCallbackQuery(query.id, { text: '❌ Доступ запрещен!', show_alert: true });
     return;
   }
-  
+
   // Answer callback to remove loading state
   bot.answerCallbackQuery(query.id);
-  
+
   if (data === 'fw_open') {
     // Open port - ask for port number
     userStates.set(userId, { action: 'open_port' });
