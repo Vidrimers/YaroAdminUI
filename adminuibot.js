@@ -720,9 +720,11 @@ bot.on('callback_query', async (query) => {
       const newState = !state.enabled;
       await setB650AutoRestart(newState);
       bot.answerCallbackQuery(query.id, { text: newState ? 'Авто-перезапуск ВКЛ' : 'Авто-перезапуск ВЫКЛ' });
-      bot.editMessageReplyMarkup({
+      const label = newState ? '🟢 ВКЛ' : '🔴 ВЫКЛ';
+      bot.editMessageText(`🌐 <b>Сеть dmd-b650</b>\n\n🔄 Авто-перезапуск: ${label}`, {
         chat_id: chatId,
         message_id: query.message.message_id,
+        parse_mode: 'HTML',
         reply_markup: getB650NetKeyboard(newState)
       });
       break;
