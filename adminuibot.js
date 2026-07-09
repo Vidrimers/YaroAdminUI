@@ -756,10 +756,9 @@ bot.on('callback_query', async (query) => {
 
     case 'b650_net_restart':
       try {
-        await executeSSHOnWindows('powershell -Command Disable-NetAdapter RustyBunker -Confirm:0');
-        await new Promise(r => setTimeout(r, 2000));
-        await executeSSHOnWindows('powershell -Command Enable-NetAdapter RustyBunker -Confirm:0');
-        bot.sendMessage(chatId, '🔄 Адаптер RustyBunker перезапущен', {
+        // Run in background process so SSH can disconnect after disable
+        await executeSSHOnWindows('powershell -Command Start-Process powershell -ArgumentList "-Command Disable-NetAdapter RustyBunker -Confirm:0; Start-Sleep 5; Enable-NetAdapter RustyBunker -Confirm:0"');
+        bot.sendMessage(chatId, '🔄 Адаптер RustyBunker перезапущен (5 сек задержка)', {
           reply_markup: getB650NetKeyboard((await getB650AutoRestart()).enabled)
         });
       } catch (err) {
