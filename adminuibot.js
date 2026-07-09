@@ -30,6 +30,11 @@ const SERVERS = {
     ip: process.env.SERVER_R3_IP || '10.0.0.3',
     mac: process.env.SERVER_R3_MAC || '68:1d:ef:60:de:c9',
     name: 'Server R3'
+  },
+  b650: {
+    ip: process.env.SERVER_B650_IP || '10.0.0.2',
+    mac: process.env.SERVER_B650_MAC || 'd8:43:ae:99:d2:5f',
+    name: 'dmd-b650'
   }
 };
 
@@ -405,6 +410,7 @@ function getHomeKeyboard() {
     inline_keyboard: [
       [{ text: `🖥️ ${SERVERS.intel.name} (${SERVERS.intel.ip})`, callback_data: 'home_intel' }],
       [{ text: `🖥️ ${SERVERS.r3.name} (${SERVERS.r3.ip})`, callback_data: 'home_r3' }],
+      [{ text: `💻 ${SERVERS.b650.name} (${SERVERS.b650.ip})`, callback_data: 'home_b650' }],
       [{ text: '🌐 Общее', callback_data: 'home_all' }],
       [{ text: '⬅️ Назад', callback_data: 'menu_back' }]
     ]
@@ -451,6 +457,16 @@ function getAllServersKeyboard() {
       [{ text: '▶️ Включение обоих', callback_data: 'all_wake' }],
       [{ text: '⏹️ Выключение обоих', callback_data: 'all_shutdown' }],
       [{ text: '🔄 Перезагрузка обоих', callback_data: 'all_reboot' }],
+      [{ text: '⬅️ Назад', callback_data: 'menu_home' }]
+    ]
+  };
+}
+
+// dmd-b650 keyboard (Windows PC - WoL only)
+function getB650Keyboard() {
+  return {
+    inline_keyboard: [
+      [{ text: '▶️ Включение (WoL)', callback_data: 'b650_wake' }],
       [{ text: '⬅️ Назад', callback_data: 'menu_home' }]
     ]
   };
@@ -536,6 +552,27 @@ bot.on('callback_query', async (query) => {
         parse_mode: 'HTML',
         reply_markup: getServerKeyboard('r3')
       });
+      break;
+
+    // ============ DMD-B650 ============
+    case 'home_b650':
+      bot.editMessageText('💻 <b>dmd-b650 (10.0.0.2)</b>', {
+        chat_id: chatId,
+        message_id: query.message.message_id,
+        parse_mode: 'HTML',
+        reply_markup: getB650Keyboard()
+      });
+      break;
+
+    case 'b650_wake':
+      try {
+        console.log(`[WoL] Sending broadcast for dmd-b650 ${SERVERS.b650.mac}`);
+        await execAsync(`ssh -o StrictHostKeyChecking=no -i /root/.ssh/vps_to_local -p 2222 root@127.0.0.1 "wakeonlan -i 10.0.0.255 ${SERVERS.b650.mac}"`);
+        bot.sendMessage(chatId, '✅ Сигнал WoL отправлен на dmd-b650');
+      } catch (err) {
+        console.error(`[WoL] Error:`, err);
+        bot.sendMessage(chatId, '❌ Ошибка: ' + err.message);
+      }
       break;
 
     // ============ ALL SERVERS ============
