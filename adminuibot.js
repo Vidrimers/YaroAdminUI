@@ -343,26 +343,6 @@ function getMenuInlineKeyboard() {
   };
 }
 
-// ============ /menu COMMAND ============
-bot.onText(/\/menu/, async (msg) => {
-  const chatId = msg.chat.id;
-  const userId = msg.from.id;
-
-  if (!isAdmin(userId)) {
-    bot.sendMessage(chatId, '❌ Доступ запрещен!');
-    return;
-  }
-
-  // Remove old keyboard if present
-  await bot.sendMessage(chatId, '🗑', {
-    reply_markup: { remove_keyboard: true }
-  });
-  bot.sendMessage(chatId, '📋 <b>Меню управления:</b>', {
-    parse_mode: 'HTML',
-    reply_markup: getMenuInlineKeyboard()
-  });
-});
-
 // ============ CALLBACK QUERY HANDLER ============
 bot.on('callback_query', async (query) => {
   const chatId = query.message.chat.id;
@@ -411,6 +391,22 @@ bot.on("message", async (msg) => {
   const chatId = msg.chat.id;
   const userId = msg.from.id;
   const text = msg.text;
+
+  if (text === "/menu") {
+    if (!isAdmin(userId)) {
+      bot.sendMessage(chatId, '❌ Доступ запрещен!');
+      return;
+    }
+    // Remove old keyboard if present
+    await bot.sendMessage(chatId, '🗑', {
+      reply_markup: { remove_keyboard: true }
+    });
+    bot.sendMessage(chatId, '📋 <b>Меню управления:</b>', {
+      parse_mode: 'HTML',
+      reply_markup: getMenuInlineKeyboard()
+    });
+    return;
+  }
 
   if (text === "/start") {
     bot.sendMessage(
