@@ -620,13 +620,13 @@ bot.on('callback_query', async (query) => {
 
     case 'b650_status':
       try {
-        const uptime = await executeSSHOnWindows('powershell -Command "{0}" -f (Get-CimInstance Win32_OperatingSystem).LastBootUpTime');
+        const uptime = await executeSSHOnWindows('powershell -Command (Get-Uptime).ToString()');
         const mem = await executeSSHOnWindows('powershell -Command (Get-CimInstance Win32_OperatingSystem).FreePhysicalMemory');
         const total = await executeSSHOnWindows('powershell -Command (Get-CimInstance Win32_OperatingSystem).TotalVisibleMemorySize');
         const memPercent = ((parseInt(total.trim()) - parseInt(mem.trim())) / parseInt(total.trim()) * 100).toFixed(1);
         const name = await executeSSHOnWindows('powershell -Command $env:COMPUTERNAME');
         const os = await executeSSHOnWindows('powershell -Command (Get-CimInstance Win32_OperatingSystem).Caption');
-        bot.sendMessage(chatId, `📊 <b>${name.trim()}</b>\n\n💻 OS: ${os.trim()}\n⏱️ Last boot: ${uptime.trim()}\n💾 RAM: ${memPercent}%`, {
+        bot.sendMessage(chatId, `📊 <b>${name.trim()}</b>\n\n💻 OS: ${os.trim()}\n⏱️ Uptime: ${uptime.trim()}\n💾 RAM: ${memPercent}%`, {
           parse_mode: 'HTML',
           reply_markup: getB650Keyboard()
         });
