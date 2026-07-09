@@ -832,14 +832,18 @@ bot.on('callback_query', async (query) => {
 
     case 'b650_disk':
       try {
-        const cUsed = await executeSSHOnWindows('(Get-PSDrive C).Used');
-        const cFree = await executeSSHOnWindows('(Get-PSDrive C).Free');
-        const dUsed = await executeSSHOnWindows('(Get-PSDrive D).Used');
-        const dFree = await executeSSHOnWindows('(Get-PSDrive D).Free');
+        const drivesRaw = await executeSSHOnWindows('Get-PSDrive -PSProvider FileSystem | ForEach-Object { "$($_.Name) $($_.Used) $($_.Free)" }');
         let msg = `💾 <b>dmd-b650 — Диски</b>\n\n`;
-        const toGB = (v) => (parseInt(v.trim()) / 1073741824).toFixed(1);
-        msg += `💿 <b>C:</b> ${toGB(cUsed)} / ${toGB(cUsed) + toGB(cFree)} GB (${toGB(cFree)} GB свободно)\n`;
-        msg += `💿 <b>D:</b> ${toGB(dUsed)} / ${toGB(dUsed) + toGB(dFree)} GB (${toGB(dFree)} GB свободно)\n`;
+        const toGB = (v) => (parseInt(v) / 1073741824).toFixed(1);
+        for (const line of drivesRaw.split('\n')) {
+          const parts = line.trim().split(/\s+/);
+          if (parts.length >= 3 && !isNaN(parseInt(parts[1]))) {
+            const dName = parts[0];
+            const used = parseInt(parts[1]);
+            const free = parseInt(parts[2]);
+            msg += `💿 <b>${dName}:</b> ${toGB(used)} / ${toGB(used + free)} GB (${toGB(free)} GB свободно)\n`;
+          }
+        }
         bot.sendMessage(chatId, msg, {
           parse_mode: 'HTML',
           reply_markup: getB650Keyboard()
