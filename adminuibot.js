@@ -551,9 +551,8 @@ bot.on('callback_query', async (query) => {
     // ============ WAKE ON LAN ============
     case 'intel_wake':
       try {
-        console.log(`[WoL] Sending to ${SERVERS.intel.ip} ${SERVERS.intel.mac} via router tunnel`);
-        const wolResult = await execAsync(`ssh -o StrictHostKeyChecking=no -i /root/.ssh/vps_to_local -p 2222 root@127.0.0.1 "wakeonlan -i ${SERVERS.intel.ip} ${SERVERS.intel.mac}"`);
-        console.log(`[WoL] Result: ${wolResult.stdout}`);
+        console.log(`[WoL] Sending broadcast to 10.0.0.255 for ${SERVERS.intel.mac} via router`);
+        await execAsync(`ssh -o StrictHostKeyChecking=no -i /root/.ssh/vps_to_local -p 2222 root@127.0.0.1 "wakeonlan -i 10.0.0.255 ${SERVERS.intel.mac}"`);
         bot.sendMessage(chatId, '✅ Сигнал WoL отправлен на Server Intel');
       } catch (err) {
         console.error(`[WoL] Error:`, err);
@@ -562,9 +561,8 @@ bot.on('callback_query', async (query) => {
       break;
     case 'r3_wake':
       try {
-        console.log(`[WoL] Sending to ${SERVERS.r3.ip} ${SERVERS.r3.mac} via router tunnel`);
-        const wolResult = await execAsync(`ssh -o StrictHostKeyChecking=no -i /root/.ssh/vps_to_local -p 2222 root@127.0.0.1 "wakeonlan -i ${SERVERS.r3.ip} ${SERVERS.r3.mac}"`);
-        console.log(`[WoL] Result: ${wolResult.stdout}`);
+        console.log(`[WoL] Sending broadcast to 10.0.0.255 for ${SERVERS.r3.mac} via router`);
+        await execAsync(`ssh -o StrictHostKeyChecking=no -i /root/.ssh/vps_to_local -p 2222 root@127.0.0.1 "wakeonlan -i 10.0.0.255 ${SERVERS.r3.mac}"`);
         bot.sendMessage(chatId, '✅ Сигнал WoL отправлен на Server R3');
       } catch (err) {
         console.error(`[WoL] Error:`, err);
@@ -573,9 +571,8 @@ bot.on('callback_query', async (query) => {
       break;
     case 'all_wake':
       try {
-        console.log(`[WoL] Sending to both servers via router tunnel`);
-        await execAsync(`ssh -o StrictHostKeyChecking=no -i /root/.ssh/vps_to_local -p 2222 root@127.0.0.1 "wakeonlan -i ${SERVERS.intel.ip} ${SERVERS.intel.mac} && wakeonlan -i ${SERVERS.r3.ip} ${SERVERS.r3.mac}"`);
-        console.log(`[WoL] Both sent`);
+        console.log(`[WoL] Sending broadcast to both servers via router`);
+        await execAsync(`ssh -o StrictHostKeyChecking=no -i /root/.ssh/vps_to_local -p 2222 root@127.0.0.1 "wakeonlan -i 10.0.0.255 ${SERVERS.intel.mac} && wakeonlan -i 10.0.0.255 ${SERVERS.r3.mac}"`);
         bot.sendMessage(chatId, '✅ Сигнал WoL отправлен на оба сервера');
       } catch (err) {
         console.error(`[WoL] Error:`, err);
