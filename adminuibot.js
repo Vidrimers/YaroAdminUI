@@ -620,13 +620,18 @@ bot.on('callback_query', async (query) => {
 
     case 'b650_status':
       try {
-        const uptime = await executeSSHOnWindows('powershell -Command "net stats workstation"');
-        const sinceLine = uptime.split('\n').find(l => l.includes('since'));
-        const bootTime = sinceLine ? sinceLine.replace('since', '').trim() : 'N/A';
+        const bootStr = await executeSSHOnWindows('powershell -Command (Get-CimInstance Win32_OperatingSystem).LastBootUpTime.ToString');
+        const bootTime = new Date(bootStr.trim());
+        const now = new Date();
+        const diff = now - bootTime;
+        const days = Math.floor(diff / 86400000);
+        const hours = Math.floor((diff % 86400000) / 3600000);
+        const mins = Math.floor((diff % 3600000) / 60000);
+        const uptime = `${days}d ${hours}h ${mins}m`;
         const mem = await executeSSHOnWindows('powershell -Command (Get-CimInstance Win32_OperatingSystem).FreePhysicalMemory');
         const total = await executeSSHOnWindows('powershell -Command (Get-CimInstance Win32_OperatingSystem).TotalVisibleMemorySize');
         const memPercent = ((parseInt(total.trim()) - parseInt(mem.trim())) / parseInt(total.trim()) * 100).toFixed(1);
-        bot.sendMessage(chatId, `📊 <b>dmd-b650</b>\n\n⏱️ Boot: ${bootTime}\n💾 RAM: ${memPercent}%`, {
+        bot.sendMessage(chatId, `📊 <b>dmd-b650</b>\n\n⏱️ Uptime: ${uptime}\n💾 RAM: ${memPercent}%`, {
           parse_mode: 'HTML',
           reply_markup: getB650Keyboard()
         });
