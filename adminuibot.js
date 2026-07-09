@@ -126,12 +126,7 @@ async function initBot() {
     await bot.setMyCommands([
       { command: 'menu', description: 'Открыть меню управления' },
       { command: 'start', description: 'Начать работу с ботом' },
-      { command: 'auth_code', description: 'Получить код для входа' },
-      { command: 'status', description: 'Статус сервера' },
-      { command: 'processes', description: 'Топ процессов' },
       { command: 'pm2', description: 'PM2 процессы' },
-      { command: 'firewall', description: 'Управление портами' },
-      { command: 'disk', description: 'Информация о дисках' },
       { command: 'help', description: 'Справка по командам' }
     ]);
     console.log('[BOT] Bot commands set');
@@ -342,15 +337,14 @@ function getMenuInlineKeyboard() {
         { text: '🔧 Другие процессы', callback_data: 'menu_other' }
       ],
       [
-        { text: '💾 Диск', callback_data: 'menu_disk' },
-        { text: '❓ Помощь', callback_data: 'menu_help' }
+        { text: '💾 Диск', callback_data: 'menu_disk' }
       ]
     ]
   };
 }
 
 // ============ /menu COMMAND ============
-bot.onText(/\/menu/, (msg) => {
+bot.onText(/\/menu/, async (msg) => {
   const chatId = msg.chat.id;
   const userId = msg.from.id;
 
@@ -359,6 +353,10 @@ bot.onText(/\/menu/, (msg) => {
     return;
   }
 
+  // Remove old keyboard if present
+  await bot.sendMessage(chatId, '🗑', {
+    reply_markup: { remove_keyboard: true }
+  });
   bot.sendMessage(chatId, '📋 <b>Меню управления:</b>', {
     parse_mode: 'HTML',
     reply_markup: getMenuInlineKeyboard()
