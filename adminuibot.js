@@ -397,10 +397,6 @@ bot.on("message", async (msg) => {
       bot.sendMessage(chatId, '❌ Доступ запрещен!');
       return;
     }
-    // Remove old keyboard if present
-    await bot.sendMessage(chatId, '🗑', {
-      reply_markup: { remove_keyboard: true }
-    });
     bot.sendMessage(chatId, '📋 <b>Меню управления:</b>', {
       parse_mode: 'HTML',
       reply_markup: getMenuInlineKeyboard()
