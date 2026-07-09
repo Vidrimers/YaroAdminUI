@@ -304,11 +304,19 @@ function executeSSHOnServer(host, command) {
 }
 
 // SSH to Windows PC (10.0.0.2) via VPS → router tunnel
-// Uses execAsync — simple commands only, no special chars that break shells
+// Uses powershell -EncodedCommand with base64 to bypass shell escaping
 async function executeSSHOnWindows(command) {
-  const fullCmd = `ssh -o StrictHostKeyChecking=no -i /root/.ssh/vps_to_local -p 2222 root@127.0.0.1 'dbclient -y -i /root/.ssh/router_to_vps vidri@10.0.0.2 ${command}'`;
+  // Encode PowerShell command as UTF-16LE base64
+  const b64 = Buffer.from(command, 'utf16le').toString('base64');
+  const fullCmd = `ssh -o StrictHostKeyChecking=no -i /root/.ssh/vps_to_local -p 2222 root@127.0.0.1 'dbclient -y -i /root/.ssh/router_to_vps vidri@10.0.0.2 powershell -EncodedCommand ${b64}'`;
   const { stdout } = await execAsync(fullCmd);
-  return stdout;
+  // Strip CLIXML wrapper if present
+  let output = stdout;
+  if (output.includes('#< CLIXML')) {
+    const lines = output.split('\n').filter(l => l.trim() && !l.includes('CLIXML') && !l.includes('<Obj') && !l.includes('</Obj') && !l.includes('<TN') && !l.includes('<MS') && !l.includes('<PR') && !l.includes('<AV') && !l.includes('<AI') && !l.includes('<PI') && !l.includes('<PC') && !l.includes('<T>') && !l.includes('<SR') && !l.includes('<SD'));
+    output = lines.join('\n').trim();
+  }
+  return output;
 }
 
 // Функция проверки прав администратора
@@ -627,11 +635,11 @@ bot.on('callback_query', async (query) => {
 
     case 'b650_disk':
       try {
-        const used = await executeSSHOnWindows('powershell -Command (Get-PSDrive C).Used');
-        const free = await executeSSHOnWindows('powershell -Command (Get-PSDrive C).Free');
-        const usedGB = (parseInt(used.trim()) / 1073741824).toFixed(1);
-        const freeGB = (parseInt(free.trim()) / 1073741824).toFixed(1);
-        const totalGB = ((parseInt(used.trim()) + parseInt(free.trim())) / 1073741824).toFixed(1);
+        const diskInfo = await executeSSHOnWindows('powershell -Command "Get-PSDrive C | Select Used,Free | ConvertTo-Json"');
+        const d = JSON.parse(diskInfo);
+        const usedGB = (d.Used / 1073741824).toFixed(1);
+        const freeGB = (d.Free / 1073741824).toFixed(1);
+        const totalGB = ((d.Used + d.Free) / 1073741824).toFixed(1);
         bot.sendMessage(chatId, `💾 <b>dmd-b650 — Диск C:</b>\n\nВсего: ${totalGB} GB\nЗанято: ${usedGB} GB\nСвободно: ${freeGB} GB`, {
           parse_mode: 'HTML',
           reply_markup: getB650Keyboard()
@@ -643,9 +651,13 @@ bot.on('callback_query', async (query) => {
 
     case 'b650_processes':
       try {
-        const procs = await executeSSHOnWindows('powershell -Command Get-Process');
-        const lines = procs.split('\n').slice(0, 10).join('\n');
-        bot.sendMessage(chatId, `⚙️ <b>dmd-b650 — Процессы</b>\n\n<pre>${lines}</pre>`, {
+        const procs = await executeSSHOnWindows('powershell -Command "Get-Process | Sort CPU -Desc | Select -First 10 Name,CPU,@{N=\'RAM\';E={[math]::Round($_.WorkingSet/1MB)}} | ConvertTo-Json"');
+        const procList = JSON.parse(procs);
+        let msg = `⚙️ <b>dmd-b650 — Топ процессов</b>\n\n`;
+        procList.forEach((p, i) => {
+          msg += `${i+1}. <b>${p.Name}</b> — CPU: ${p.CPU || 0}s, RAM: ${p.RAM}MB\n`;
+        });
+        bot.sendMessage(chatId, msg, {
           parse_mode: 'HTML',
           reply_markup: getB650Keyboard()
         });
