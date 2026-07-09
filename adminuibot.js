@@ -245,6 +245,41 @@ function executeSSHCommand(command) {
   });
 }
 
+// SSH to local servers (10.0.0.3, 10.0.0.5) via VPS
+function executeSSHOnServer(host, command) {
+  return new Promise((resolve, reject) => {
+    const conn = new SSHClient();
+    const sshKeyPath = (process.env.SSH_KEY_PATH || `${os.homedir()}/.ssh/id_rsa`).replace(/^~/, os.homedir());
+    const sshPassword = process.env.SSH_PASSWORD;
+
+    const connConfig = {
+      host: SERVER_IP,
+      port: 22,
+      username: process.env.SSH_USERNAME || 'root'
+    };
+
+    if (sshPassword) connConfig.password = sshPassword;
+    if (fs.existsSync(sshKeyPath)) {
+      try { connConfig.privateKey = fs.readFileSync(sshKeyPath); } catch (e) {}
+    }
+
+    conn.on('ready', () => {
+      // SSH from VPS to local server
+      conn.exec(`ssh -o StrictHostKeyChecking=no vidrimers@${host} "${command}"`, (err, stream) => {
+        if (err) { conn.end(); return reject(err); }
+        let output = '';
+        let errorOutput = '';
+        stream.on('close', (code) => {
+          conn.end();
+          if (code !== 0 && errorOutput) reject(new Error(errorOutput));
+          else resolve(output);
+        }).on('data', (data) => { output += data.toString(); })
+          .stderr.on('data', (data) => { errorOutput += data.toString(); });
+      });
+    }).on('error', reject).connect(connConfig);
+  });
+}
+
 // Функция проверки прав администратора
 function isAdmin(userId) {
   // Если TELEGRAM_ADMIN_ID не установлен, разрешаем всем (для разработки)
@@ -338,7 +373,54 @@ function getMenuInlineKeyboard() {
       ],
       [
         { text: '💾 Диск', callback_data: 'menu_disk' }
+      ],
+      [
+        { text: '🏠 Home', callback_data: 'menu_home' }
       ]
+    ]
+  };
+}
+
+// Home submenu
+function getHomeKeyboard() {
+  return {
+    inline_keyboard: [
+      [{ text: '🖥️ Server Intel (10.0.0.5)', callback_data: 'home_intel' }],
+      [{ text: '🖥️ Server R3 (10.0.0.3)', callback_data: 'home_r3' }],
+      [{ text: '🌐 Общее', callback_data: 'home_all' }],
+      [{ text: '⬅️ Назад', callback_data: 'menu_back' }]
+    ]
+  };
+}
+
+// Server submenu (same for both servers)
+function getServerKeyboard(server) {
+  return {
+    inline_keyboard: [
+      [{ text: '▶️ Включение', callback_data: `${server}_wake` }],
+      [{ text: '⏹️ Выключение', callback_data: `${server}_shutdown` }],
+      [{ text: '🔄 Перезагрузка', callback_data: `${server}_reboot` }],
+      [
+        { text: '💾 Диск', callback_data: `${server}_disk` },
+        { text: '⚙️ Процессы', callback_data: `${server}_processes` }
+      ],
+      [
+        { text: '🔥 Firewall', callback_data: `${server}_firewall` },
+        { text: '📊 Статус', callback_data: `${server}_status` }
+      ],
+      [{ text: '⬅️ Назад', callback_data: 'menu_home' }]
+    ]
+  };
+}
+
+// All servers submenu
+function getAllServersKeyboard() {
+  return {
+    inline_keyboard: [
+      [{ text: '▶️ Включение обоих', callback_data: 'all_wake' }],
+      [{ text: '⏹️ Выключение обоих', callback_data: 'all_shutdown' }],
+      [{ text: '🔄 Перезагрузка обоих', callback_data: 'all_reboot' }],
+      [{ text: '⬅️ Назад', callback_data: 'menu_home' }]
     ]
   };
 }
@@ -383,6 +465,206 @@ bot.on('callback_query', async (query) => {
       break;
     case 'menu_help':
       bot.emit('message', { chat: { id: chatId }, from: { id: userId }, text: '/help' });
+      break;
+
+    // ============ HOME MENU ============
+    case 'menu_home':
+      bot.editMessageText('🏠 <b>Выберите сервер:</b>', {
+        chat_id: chatId,
+        message_id: query.message.message_id,
+        parse_mode: 'HTML',
+        reply_markup: getHomeKeyboard()
+      });
+      break;
+    case 'menu_back':
+      bot.editMessageText('📋 <b>Меню управления:</b>', {
+        chat_id: chatId,
+        message_id: query.message.message_id,
+        parse_mode: 'HTML',
+        reply_markup: getMenuInlineKeyboard()
+      });
+      break;
+
+    // ============ SERVER INTEL ============
+    case 'home_intel':
+      bot.editMessageText('🖥️ <b>dmd-server-intel (10.0.0.5)</b>', {
+        chat_id: chatId,
+        message_id: query.message.message_id,
+        parse_mode: 'HTML',
+        reply_markup: getServerKeyboard('intel')
+      });
+      break;
+
+    // ============ SERVER R3 ============
+    case 'home_r3':
+      bot.editMessageText('🖥️ <b>dmd-server-r3 (10.0.0.3)</b>', {
+        chat_id: chatId,
+        message_id: query.message.message_id,
+        parse_mode: 'HTML',
+        reply_markup: getServerKeyboard('r3')
+      });
+      break;
+
+    // ============ ALL SERVERS ============
+    case 'home_all':
+      bot.editMessageText('🌐 <b>Управление всеми серверами</b>', {
+        chat_id: chatId,
+        message_id: query.message.message_id,
+        parse_mode: 'HTML',
+        reply_markup: getAllServersKeyboard()
+      });
+      break;
+
+    // ============ WAKE ON LAN ============
+    case 'intel_wake':
+      try {
+        await executeSSHCommand('wakeonlan -i 10.0.0.5 d8:bb:c1:09:14:65');
+        bot.answerCallbackQuery(query.id, { text: '✅ Сигнал отправлен на Server Intel!' });
+      } catch (err) {
+        bot.answerCallbackQuery(query.id, { text: '❌ Ошибка: ' + err.message, show_alert: true });
+      }
+      break;
+    case 'r3_wake':
+      try {
+        await executeSSHCommand('wakeonlan -i 10.0.0.3 68:1d:ef:60:de:c9');
+        bot.answerCallbackQuery(query.id, { text: '✅ Сигнал отправлен на Server R3!' });
+      } catch (err) {
+        bot.answerCallbackQuery(query.id, { text: '❌ Ошибка: ' + err.message, show_alert: true });
+      }
+      break;
+    case 'all_wake':
+      try {
+        await executeSSHCommand('wakeonlan -i 10.0.0.5 d8:bb:c1:09:14:65 && wakeonlan -i 10.0.0.3 68:1d:ef:60:de:c9');
+        bot.answerCallbackQuery(query.id, { text: '✅ Сигнал отправлен на оба сервера!' });
+      } catch (err) {
+        bot.answerCallbackQuery(query.id, { text: '❌ Ошибка: ' + err.message, show_alert: true });
+      }
+      break;
+
+    // ============ SHUTDOWN ============
+    case 'intel_shutdown':
+      try {
+        await executeSSHOnServer('10.0.0.5', 'sudo shutdown -h now');
+        bot.answerCallbackQuery(query.id, { text: '✅ Server Intel выключается...' });
+      } catch (err) {
+        bot.answerCallbackQuery(query.id, { text: '❌ Ошибка: ' + err.message, show_alert: true });
+      }
+      break;
+    case 'r3_shutdown':
+      try {
+        await executeSSHOnServer('10.0.0.3', 'sudo shutdown -h now');
+        bot.answerCallbackQuery(query.id, { text: '✅ Server R3 выключается...' });
+      } catch (err) {
+        bot.answerCallbackQuery(query.id, { text: '❌ Ошибка: ' + err.message, show_alert: true });
+      }
+      break;
+    case 'all_shutdown':
+      try {
+        await executeSSHOnServer('10.0.0.5', 'sudo shutdown -h now');
+        await executeSSHOnServer('10.0.0.3', 'sudo shutdown -h now');
+        bot.answerCallbackQuery(query.id, { text: '✅ Оба сервера выключаются...' });
+      } catch (err) {
+        bot.answerCallbackQuery(query.id, { text: '❌ Ошибка: ' + err.message, show_alert: true });
+      }
+      break;
+
+    // ============ REBOOT ============
+    case 'intel_reboot':
+      try {
+        await executeSSHOnServer('10.0.0.5', 'sudo reboot');
+        bot.answerCallbackQuery(query.id, { text: '✅ Server Intel перезагружается...' });
+      } catch (err) {
+        bot.answerCallbackQuery(query.id, { text: '❌ Ошибка: ' + err.message, show_alert: true });
+      }
+      break;
+    case 'r3_reboot':
+      try {
+        await executeSSHOnServer('10.0.0.3', 'sudo reboot');
+        bot.answerCallbackQuery(query.id, { text: '✅ Server R3 перезагружается...' });
+      } catch (err) {
+        bot.answerCallbackQuery(query.id, { text: '❌ Ошибка: ' + err.message, show_alert: true });
+      }
+      break;
+    case 'all_reboot':
+      try {
+        await executeSSHOnServer('10.0.0.5', 'sudo reboot');
+        await executeSSHOnServer('10.0.0.3', 'sudo reboot');
+        bot.answerCallbackQuery(query.id, { text: '✅ Оба сервера перезагружаются...' });
+      } catch (err) {
+        bot.answerCallbackQuery(query.id, { text: '❌ Ошибка: ' + err.message, show_alert: true });
+      }
+      break;
+
+    // ============ SERVER STATUS ============
+    case 'intel_status':
+    case 'r3_status':
+      const statusServer = data === 'intel_status' ? '10.0.0.5' : '10.0.0.3';
+      const statusName = data === 'intel_status' ? 'Server Intel' : 'Server R3';
+      try {
+        const uptime = await executeSSHOnServer(statusServer, 'uptime -p');
+        const mem = await executeSSHOnServer(statusServer, 'free | grep Mem');
+        const memParts = mem.split(/\s+/);
+        const memPercent = ((parseInt(memParts[2]) / parseInt(memParts[1])) * 100).toFixed(1);
+        bot.answerCallbackQuery(query.id);
+        bot.sendMessage(chatId, `📊 <b>${statusName}</b>\n\n⏱️ ${uptime.trim()}\n💾 RAM: ${memPercent}%`, {
+          parse_mode: 'HTML',
+          reply_markup: getServerKeyboard(data === 'intel_status' ? 'intel' : 'r3')
+        });
+      } catch (err) {
+        bot.answerCallbackQuery(query.id, { text: '❌ Сервер недоступен', show_alert: true });
+      }
+      break;
+
+    // ============ SERVER DISK ============
+    case 'intel_disk':
+    case 'r3_disk':
+      const diskServer = data === 'intel_disk' ? '10.0.0.5' : '10.0.0.3';
+      const diskName = data === 'intel_disk' ? 'Server Intel' : 'Server R3';
+      try {
+        const disk = await executeSSHOnServer(diskServer, 'df -h / | tail -1');
+        const diskParts = disk.split(/\s+/);
+        bot.answerCallbackQuery(query.id);
+        bot.sendMessage(chatId, `💾 <b>${diskName} — Диск</b>\n\nВсего: ${diskParts[1]}\nЗанято: ${diskParts[2]} (${diskParts[4]})\nСвободно: ${diskParts[3]}`, {
+          parse_mode: 'HTML',
+          reply_markup: getServerKeyboard(data === 'intel_disk' ? 'intel' : 'r3')
+        });
+      } catch (err) {
+        bot.answerCallbackQuery(query.id, { text: '❌ Сервер недоступен', show_alert: true });
+      }
+      break;
+
+    // ============ SERVER PROCESSES ============
+    case 'intel_processes':
+    case 'r3_processes':
+      const procServer = data === 'intel_processes' ? '10.0.0.5' : '10.0.0.3';
+      const procName = data === 'intel_processes' ? 'Server Intel' : 'Server R3';
+      try {
+        const procs = await executeSSHOnServer(procServer, 'ps aux --sort=-%cpu | head -6');
+        bot.answerCallbackQuery(query.id);
+        bot.sendMessage(chatId, `⚙️ <b>${procName} — Топ процессов</b>\n\n<pre>${procs}</pre>`, {
+          parse_mode: 'HTML',
+          reply_markup: getServerKeyboard(data === 'intel_processes' ? 'intel' : 'r3')
+        });
+      } catch (err) {
+        bot.answerCallbackQuery(query.id, { text: '❌ Сервер недоступен', show_alert: true });
+      }
+      break;
+
+    // ============ SERVER FIREWALL ============
+    case 'intel_firewall':
+    case 'r3_firewall':
+      const fwServer = data === 'intel_firewall' ? '10.0.0.5' : '10.0.0.3';
+      const fwName = data === 'intel_firewall' ? 'Server Intel' : 'Server R3';
+      try {
+        const fw = await executeSSHOnServer(fwServer, 'sudo ufw status numbered 2>/dev/null || echo "UFW not installed"');
+        bot.answerCallbackQuery(query.id);
+        bot.sendMessage(chatId, `🔥 <b>${fwName} — Firewall</b>\n\n<pre>${fw}</pre>`, {
+          parse_mode: 'HTML',
+          reply_markup: getServerKeyboard(data === 'intel_firewall' ? 'intel' : 'r3')
+        });
+      } catch (err) {
+        bot.answerCallbackQuery(query.id, { text: '❌ Сервер недоступен', show_alert: true });
+      }
       break;
   }
 });
