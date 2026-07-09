@@ -506,7 +506,8 @@ function pollServerOnline(chatId, ip, name, attempts = 0) {
   }
   setTimeout(async () => {
     try {
-      await execAsync(`ssh -o StrictHostKeyChecking=no -i /root/.ssh/vps_to_local -p 2222 root@127.0.0.1 "dbclient -y -i /root/.ssh/router_to_vps ping -c 1 -W 2 ${ip}"`);
+      // Use nc to check if SSH port is open (simpler than ping through dbclient)
+      await execAsync(`ssh -o StrictHostKeyChecking=no -i /root/.ssh/vps_to_local -p 2222 root@127.0.0.1 'dbclient -y -i /root/.ssh/router_to_vps vidri@${ip} hostname'`);
       console.log(`[Poll] ${name} (${ip}) is online after ${attempts * 10}s`);
       bot.sendMessage(chatId, `🟢 ${name} (${ip}) включился!`);
     } catch (err) {
