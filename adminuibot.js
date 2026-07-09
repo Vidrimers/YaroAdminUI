@@ -620,11 +620,13 @@ bot.on('callback_query', async (query) => {
 
     case 'b650_status':
       try {
-        const uptime = await executeSSHOnWindows('powershell -Command (Get-CimInstance Win32_OperatingSystem).LastBootUpTime');
+        const uptime = await executeSSHOnWindows('powershell -Command (Get-CimInstance Win32_OperatingSystem).LastBootUpTime.ToString()');
         const mem = await executeSSHOnWindows('powershell -Command (Get-CimInstance Win32_OperatingSystem).FreePhysicalMemory');
         const total = await executeSSHOnWindows('powershell -Command (Get-CimInstance Win32_OperatingSystem).TotalVisibleMemorySize');
         const memPercent = ((parseInt(total.trim()) - parseInt(mem.trim())) / parseInt(total.trim()) * 100).toFixed(1);
-        bot.sendMessage(chatId, `📊 <b>dmd-b650</b>\n\n⏱️ Last boot: ${uptime.trim()}\n💾 RAM: ${memPercent}%`, {
+        const name = await executeSSHOnWindows('powershell -Command $env:COMPUTERNAME');
+        const os = await executeSSHOnWindows('powershell -Command (Get-CimInstance Win32_OperatingSystem).Caption');
+        bot.sendMessage(chatId, `📊 <b>${name.trim()}</b>\n\n💻 OS: ${os.trim()}\n⏱️ Last boot: ${uptime.trim()}\n💾 RAM: ${memPercent}%`, {
           parse_mode: 'HTML',
           reply_markup: getB650Keyboard()
         });
@@ -635,12 +637,17 @@ bot.on('callback_query', async (query) => {
 
     case 'b650_disk':
       try {
-        const diskInfo = await executeSSHOnWindows('powershell -Command "Get-PSDrive C | Select Used,Free | ConvertTo-Json"');
-        const d = JSON.parse(diskInfo);
-        const usedGB = (d.Used / 1073741824).toFixed(1);
-        const freeGB = (d.Free / 1073741824).toFixed(1);
-        const totalGB = ((d.Used + d.Free) / 1073741824).toFixed(1);
-        bot.sendMessage(chatId, `💾 <b>dmd-b650 — Диск C:</b>\n\nВсего: ${totalGB} GB\nЗанято: ${usedGB} GB\nСвободно: ${freeGB} GB`, {
+        const diskJson = await executeSSHOnWindows('powershell -Command "Get-PSDrive -PSProvider FileSystem | Select Name,Used,Free | ConvertTo-Json"');
+        const drives = JSON.parse(diskJson);
+        const driveList = Array.isArray(drives) ? drives : [drives];
+        let msg = `💾 <b>dmd-b650 — Диски</b>\n\n`;
+        driveList.forEach(d => {
+          const usedGB = d.Used ? (d.Used / 1073741824).toFixed(1) : '0';
+          const freeGB = d.Free ? (d.Free / 1073741824).toFixed(1) : '0';
+          const totalGB = d.Used && d.Free ? ((d.Used + d.Free) / 1073741824).toFixed(1) : '0';
+          msg += `💿 <b>${d.Name}:</b> ${usedGB} / ${totalGB} GB (${freeGB} GB свободно)\n`;
+        });
+        bot.sendMessage(chatId, msg, {
           parse_mode: 'HTML',
           reply_markup: getB650Keyboard()
         });
