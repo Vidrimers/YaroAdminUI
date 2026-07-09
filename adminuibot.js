@@ -497,6 +497,25 @@ function getB650Keyboard() {
   };
 }
 
+// Poll server until it responds to ping, then notify
+function pollServerOnline(chatId, ip, name, attempts = 0) {
+  const maxAttempts = 30; // 30 * 10s = 5 min max
+  if (attempts >= maxAttempts) {
+    bot.sendMessage(chatId, `❌ ${name} (${ip}) не включился за 5 минут`);
+    return;
+  }
+  setTimeout(async () => {
+    try {
+      await execAsync(`ssh -o StrictHostKeyChecking=no -i /root/.ssh/vps_to_local -p 2222 root@127.0.0.1 "dbclient -y -i /root/.ssh/router_to_vps ping -c 1 -W 2 ${ip}"`);
+      console.log(`[Poll] ${name} (${ip}) is online after ${attempts * 10}s`);
+      bot.sendMessage(chatId, `🟢 ${name} (${ip}) включился!`);
+    } catch (err) {
+      // Still offline, keep polling
+      pollServerOnline(chatId, ip, name, attempts + 1);
+    }
+  }, 10000); // Check every 10 seconds
+}
+
 // ============ CALLBACK QUERY HANDLER ============
 bot.on('callback_query', async (query) => {
   const chatId = query.message.chat.id;
@@ -692,9 +711,11 @@ bot.on('callback_query', async (query) => {
     // ============ WAKE ON LAN ============
     case 'intel_wake':
       try {
-        console.log(`[WoL] Sending broadcast to 10.0.0.255 for ${SERVERS.intel.mac} via router`);
+        console.log(`[WoL] Sending broadcast for Intel ${SERVERS.intel.mac}`);
         await execAsync(`ssh -o StrictHostKeyChecking=no -i /root/.ssh/vps_to_local -p 2222 root@127.0.0.1 "wakeonlan -i 10.0.0.255 ${SERVERS.intel.mac}"`);
         bot.sendMessage(chatId, '✅ Сигнал WoL отправлен на Server Intel');
+        // Poll until server responds
+        pollServerOnline(chatId, SERVERS.intel.ip, 'Server Intel');
       } catch (err) {
         console.error(`[WoL] Error:`, err);
         bot.sendMessage(chatId, '❌ Ошибка: ' + err.message);
@@ -702,9 +723,10 @@ bot.on('callback_query', async (query) => {
       break;
     case 'r3_wake':
       try {
-        console.log(`[WoL] Sending broadcast to 10.0.0.255 for ${SERVERS.r3.mac} via router`);
+        console.log(`[WoL] Sending broadcast for R3 ${SERVERS.r3.mac}`);
         await execAsync(`ssh -o StrictHostKeyChecking=no -i /root/.ssh/vps_to_local -p 2222 root@127.0.0.1 "wakeonlan -i 10.0.0.255 ${SERVERS.r3.mac}"`);
         bot.sendMessage(chatId, '✅ Сигнал WoL отправлен на Server R3');
+        pollServerOnline(chatId, SERVERS.r3.ip, 'Server R3');
       } catch (err) {
         console.error(`[WoL] Error:`, err);
         bot.sendMessage(chatId, '❌ Ошибка: ' + err.message);
@@ -715,6 +737,8 @@ bot.on('callback_query', async (query) => {
         console.log(`[WoL] Sending broadcast to both servers via router`);
         await execAsync(`ssh -o StrictHostKeyChecking=no -i /root/.ssh/vps_to_local -p 2222 root@127.0.0.1 "wakeonlan -i 10.0.0.255 ${SERVERS.intel.mac} && wakeonlan -i 10.0.0.255 ${SERVERS.r3.mac}"`);
         bot.sendMessage(chatId, '✅ Сигнал WoL отправлен на оба сервера');
+        pollServerOnline(chatId, SERVERS.intel.ip, 'Server Intel');
+        pollServerOnline(chatId, SERVERS.r3.ip, 'Server R3');
       } catch (err) {
         console.error(`[WoL] Error:`, err);
         bot.sendMessage(chatId, '❌ Ошибка: ' + err.message);
