@@ -620,14 +620,19 @@ bot.on('callback_query', async (query) => {
 
     case 'b650_status':
       try {
-        const bootStr = await executeSSHOnWindows('powershell -Command (Get-CimInstance Win32_OperatingSystem).LastBootUpTime');
-        const bootTime = new Date(bootStr.trim());
-        const now = new Date();
-        const diff = now - bootTime;
-        const days = Math.floor(diff / 86400000);
-        const hours = Math.floor((diff % 86400000) / 3600000);
-        const mins = Math.floor((diff % 3600000) / 60000);
-        const uptime = `${days}d ${hours}h ${mins}m`;
+        const sysinfo = await executeSSHOnWindows('powershell -Command systeminfo');
+        const bootLine = sysinfo.split('\n').find(l => l.includes('System Boot Time'));
+        const bootStr = bootLine ? bootLine.split(':').slice(1).join(':').trim() : null;
+        let uptime = 'N/A';
+        if (bootStr) {
+          const bootTime = new Date(bootStr);
+          const now = new Date();
+          const diff = now - bootTime;
+          const days = Math.floor(diff / 86400000);
+          const hours = Math.floor((diff % 86400000) / 3600000);
+          const mins = Math.floor((diff % 3600000) / 60000);
+          uptime = `${days}d ${hours}h ${mins}m`;
+        }
         const mem = await executeSSHOnWindows('powershell -Command (Get-CimInstance Win32_OperatingSystem).FreePhysicalMemory');
         const total = await executeSSHOnWindows('powershell -Command (Get-CimInstance Win32_OperatingSystem).TotalVisibleMemorySize');
         const memPercent = ((parseInt(total.trim()) - parseInt(mem.trim())) / parseInt(total.trim()) * 100).toFixed(1);
