@@ -732,11 +732,11 @@ bot.on('callback_query', async (query) => {
 
     case 'b650_net_status':
       try {
-        const adapter = await executeSSHOnWindows('powershell -Command Get-NetAdapter | Where Status -eq Up | Select Name,MacAddress,LinkSpeed,Status | ConvertTo-Json -Compress');
-        const a = JSON.parse(adapter);
+        const name = await executeSSHOnWindows('powershell -Command Get-NetAdapter | Where Status -eq Up | Select -ExpandProperty Name');
+        const mac = await executeSSHOnWindows('powershell -Command Get-NetAdapter | Where Status -eq Up | Select -ExpandProperty MacAddress');
+        const speed = await executeSSHOnWindows('powershell -Command Get-NetAdapter | Where Status -eq Up | Select -ExpandProperty LinkSpeed');
         const ip = await executeSSHOnWindows('powershell -Command Get-NetIPAddress -AddressFamily IPv4 | Where IPAddress -notlike 127.* | Select -Expand IPAddress');
-        const status = Array.isArray(a) ? a[0] : a;
-        bot.sendMessage(chatId, `📡 <b>Адаптер:</b> ${status.Name}\n🔗 MAC: ${status.MacAddress}\n📶 Скорость: ${status.LinkSpeed}\n🌐 IP: ${ip.trim()}\n📶 Статус: ${status.Status}`, {
+        bot.sendMessage(chatId, `📡 <b>Адаптер:</b> ${name.trim()}\n🔗 MAC: ${mac.trim()}\n📶 Скорость: ${speed.trim()}\n🌐 IP: ${ip.trim()}`, {
           parse_mode: 'HTML',
           reply_markup: getB650NetKeyboard((await getB650AutoRestart()).enabled)
         });
@@ -817,16 +817,23 @@ bot.on('callback_query', async (query) => {
 
     case 'b650_disk':
       try {
-        const diskJson = await executeSSHOnWindows('powershell -Command "Get-PSDrive -PSProvider FileSystem | Select Name,Used,Free | ConvertTo-Json"');
-        const drives = JSON.parse(diskJson);
-        const driveList = Array.isArray(drives) ? drives : [drives];
+        const drives = await executeSSHOnWindows('powershell -Command Get-PSDrive -PSProvider FileSystem | Select Name,Used,Free');
         let msg = `💾 <b>dmd-b650 — Диски</b>\n\n`;
-        driveList.forEach(d => {
-          const usedGB = d.Used ? (d.Used / 1073741824).toFixed(1) : '0';
-          const freeGB = d.Free ? (d.Free / 1073741824).toFixed(1) : '0';
-          const totalGB = d.Used && d.Free ? ((d.Used + d.Free) / 1073741824).toFixed(1) : '0';
-          msg += `💿 <b>${d.Name}:</b> ${usedGB} / ${totalGB} GB (${freeGB} GB свободно)\n`;
-        });
+        const lines = drives.split('\n').filter(l => l.trim() && !l.includes('Name'));
+        for (const line of lines) {
+          const parts = line.trim().split(/\s+/);
+          if (parts.length >= 3) {
+            const dName = parts[0];
+            const used = parseInt(parts[1]);
+            const free = parseInt(parts[2]);
+            if (!isNaN(used) && !isNaN(free)) {
+              const usedGB = (used / 1073741824).toFixed(1);
+              const freeGB = (free / 1073741824).toFixed(1);
+              const totalGB = ((used + free) / 1073741824).toFixed(1);
+              msg += `💿 <b>${dName}:</b> ${usedGB} / ${totalGB} GB (${freeGB} GB свободно)\n`;
+            }
+          }
+        }
         bot.sendMessage(chatId, msg, {
           parse_mode: 'HTML',
           reply_markup: getB650Keyboard()
