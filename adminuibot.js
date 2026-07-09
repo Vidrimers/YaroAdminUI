@@ -304,38 +304,11 @@ function executeSSHOnServer(host, command) {
 }
 
 // SSH to Windows PC (10.0.0.2) via VPS → router tunnel
-function executeSSHOnWindows(command) {
-  return new Promise((resolve, reject) => {
-    const conn = new SSHClient();
-    const sshKeyPath = (process.env.SSH_KEY_PATH || `${os.homedir()}/.ssh/id_rsa`).replace(/^~/, os.homedir());
-    const sshPassword = process.env.SSH_PASSWORD;
-
-    const connConfig = {
-      host: SERVER_IP,
-      port: 22,
-      username: process.env.SSH_USERNAME || 'root'
-    };
-
-    if (sshPassword) connConfig.password = sshPassword;
-    if (fs.existsSync(sshKeyPath)) {
-      try { connConfig.privateKey = fs.readFileSync(sshKeyPath); } catch (e) {}
-    }
-
-    conn.on('ready', () => {
-      // VPS → router tunnel → Windows
-      conn.exec(`ssh -o StrictHostKeyChecking=no -i /root/.ssh/vps_to_local -p 2222 root@127.0.0.1 "dbclient -y -i /root/.ssh/router_to_vps vidri@10.0.0.2 ${command}"`, (err, stream) => {
-        if (err) { conn.end(); return reject(err); }
-        let output = '';
-        let errorOutput = '';
-        stream.on('close', (code) => {
-          conn.end();
-          if (code !== 0 && errorOutput) reject(new Error(errorOutput));
-          else resolve(output);
-        }).on('data', (data) => { output += data.toString(); })
-          .stderr.on('data', (data) => { errorOutput += data.toString(); });
-      });
-    }).on('error', reject).connect(connConfig);
-  });
+// Uses execAsync — simple commands only, no special chars that break shells
+async function executeSSHOnWindows(command) {
+  const fullCmd = `ssh -o StrictHostKeyChecking=no -i /root/.ssh/vps_to_local -p 2222 root@127.0.0.1 'dbclient -y -i /root/.ssh/router_to_vps vidri@10.0.0.2 ${command}'`;
+  const { stdout } = await execAsync(fullCmd);
+  return stdout;
 }
 
 // Функция проверки прав администратора
@@ -640,8 +613,10 @@ bot.on('callback_query', async (query) => {
     case 'b650_status':
       try {
         const uptime = await executeSSHOnWindows('powershell -Command (Get-CimInstance Win32_OperatingSystem).LastBootUpTime');
-        const mem = await executeSSHOnWindows('powershell -Command "$os=Get-CimInstance Win32_OperatingSystem; [math]::Round(($os.TotalVisibleMemorySize-$os.FreePhysicalMemory)/$os.TotalVisibleMemorySize*100,1)"');
-        bot.sendMessage(chatId, `📊 <b>dmd-b650</b>\n\n⏱️ Last boot: ${uptime.trim()}\n💾 RAM: ${mem.trim()}%`, {
+        const mem = await executeSSHOnWindows('powershell -Command (Get-CimInstance Win32_OperatingSystem).FreePhysicalMemory');
+        const total = await executeSSHOnWindows('powershell -Command (Get-CimInstance Win32_OperatingSystem).TotalVisibleMemorySize');
+        const memPercent = ((parseInt(total.trim()) - parseInt(mem.trim())) / parseInt(total.trim()) * 100).toFixed(1);
+        bot.sendMessage(chatId, `📊 <b>dmd-b650</b>\n\n⏱️ Last boot: ${uptime.trim()}\n💾 RAM: ${memPercent}%`, {
           parse_mode: 'HTML',
           reply_markup: getB650Keyboard()
         });
@@ -652,9 +627,12 @@ bot.on('callback_query', async (query) => {
 
     case 'b650_disk':
       try {
-        const disk = await executeSSHOnWindows('powershell -Command "Get-PSDrive C | Select-Object @{N=\'Used\';E={[math]::Round($_.Used/1GB,1)}}, @{N=\'Free\';E={[math]::Round($_.Free/1GB,1)}}, @{N=\'Total\';E={[math]::Round(($_.Used+$_.Free)/1GB,1)}} | ConvertTo-Json"');
-        const d = JSON.parse(disk);
-        bot.sendMessage(chatId, `💾 <b>dmd-b650 — Диск</b>\n\nВсего: ${d.Total} GB\nЗанято: ${d.Used} GB\nСвободно: ${d.Free} GB`, {
+        const used = await executeSSHOnWindows('powershell -Command (Get-PSDrive C).Used');
+        const free = await executeSSHOnWindows('powershell -Command (Get-PSDrive C).Free');
+        const usedGB = (parseInt(used.trim()) / 1073741824).toFixed(1);
+        const freeGB = (parseInt(free.trim()) / 1073741824).toFixed(1);
+        const totalGB = ((parseInt(used.trim()) + parseInt(free.trim())) / 1073741824).toFixed(1);
+        bot.sendMessage(chatId, `💾 <b>dmd-b650 — Диск C:</b>\n\nВсего: ${totalGB} GB\nЗанято: ${usedGB} GB\nСвободно: ${freeGB} GB`, {
           parse_mode: 'HTML',
           reply_markup: getB650Keyboard()
         });
@@ -665,8 +643,9 @@ bot.on('callback_query', async (query) => {
 
     case 'b650_processes':
       try {
-        const procs = await executeSSHOnWindows('powershell -Command "Get-Process | Sort-Object CPU -Descending | Select-Object -First 8 Name, @{N=\'CPU\';E={[math]::Round($_.CPU,1)}}, @{N=\'RAM_MB\';E={[math]::Round($_.WorkingSet64/1MB,1)}} | Format-Table -AutoSize"');
-        bot.sendMessage(chatId, `⚙️ <b>dmd-b650 — Топ процессов</b>\n\n<pre>${procs}</pre>`, {
+        const procs = await executeSSHOnWindows('powershell -Command Get-Process');
+        const lines = procs.split('\n').slice(0, 10).join('\n');
+        bot.sendMessage(chatId, `⚙️ <b>dmd-b650 — Процессы</b>\n\n<pre>${lines}</pre>`, {
           parse_mode: 'HTML',
           reply_markup: getB650Keyboard()
         });
