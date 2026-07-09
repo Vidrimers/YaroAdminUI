@@ -626,9 +626,7 @@ bot.on('callback_query', async (query) => {
         const mem = await executeSSHOnWindows('powershell -Command (Get-CimInstance Win32_OperatingSystem).FreePhysicalMemory');
         const total = await executeSSHOnWindows('powershell -Command (Get-CimInstance Win32_OperatingSystem).TotalVisibleMemorySize');
         const memPercent = ((parseInt(total.trim()) - parseInt(mem.trim())) / parseInt(total.trim()) * 100).toFixed(1);
-        const name = await executeSSHOnWindows('powershell -Command $env:COMPUTERNAME');
-        const os = await executeSSHOnWindows('powershell -Command (Get-CimInstance Win32_OperatingSystem).Caption');
-        bot.sendMessage(chatId, `📊 <b>${name.trim()}</b>\n\n💻 OS: ${os.trim()}\n⏱️ Boot: ${uptime}\n💾 RAM: ${memPercent}%`, {
+        bot.sendMessage(chatId, `📊 <b>dmd-b650</b>\n\n⏱️ Boot: ${uptime}\n💾 RAM: ${memPercent}%`, {
           parse_mode: 'HTML',
           reply_markup: getB650Keyboard()
         });
