@@ -303,6 +303,41 @@ function executeSSHOnServer(host, command) {
   });
 }
 
+// SSH to Windows PC (10.0.0.2) via VPS → router tunnel
+function executeSSHOnWindows(command) {
+  return new Promise((resolve, reject) => {
+    const conn = new SSHClient();
+    const sshKeyPath = (process.env.SSH_KEY_PATH || `${os.homedir()}/.ssh/id_rsa`).replace(/^~/, os.homedir());
+    const sshPassword = process.env.SSH_PASSWORD;
+
+    const connConfig = {
+      host: SERVER_IP,
+      port: 22,
+      username: process.env.SSH_USERNAME || 'root'
+    };
+
+    if (sshPassword) connConfig.password = sshPassword;
+    if (fs.existsSync(sshKeyPath)) {
+      try { connConfig.privateKey = fs.readFileSync(sshKeyPath); } catch (e) {}
+    }
+
+    conn.on('ready', () => {
+      // VPS → router tunnel → Windows
+      conn.exec(`ssh -o StrictHostKeyChecking=no -i /root/.ssh/vps_to_local -p 2222 root@127.0.0.1 "dbclient -y -i /root/.ssh/router_to_vps vidri@10.0.0.2 '${command}'"`, (err, stream) => {
+        if (err) { conn.end(); return reject(err); }
+        let output = '';
+        let errorOutput = '';
+        stream.on('close', (code) => {
+          conn.end();
+          if (code !== 0 && errorOutput) reject(new Error(errorOutput));
+          else resolve(output);
+        }).on('data', (data) => { output += data.toString(); })
+          .stderr.on('data', (data) => { errorOutput += data.toString(); });
+      });
+    }).on('error', reject).connect(connConfig);
+  });
+}
+
 // Функция проверки прав администратора
 function isAdmin(userId) {
   // Если TELEGRAM_ADMIN_ID не установлен, разрешаем всем (для разработки)
@@ -462,11 +497,20 @@ function getAllServersKeyboard() {
   };
 }
 
-// dmd-b650 keyboard (Windows PC - WoL only)
+// dmd-b650 keyboard (Windows PC)
 function getB650Keyboard() {
   return {
     inline_keyboard: [
       [{ text: '▶️ Включение (WoL)', callback_data: 'b650_wake' }],
+      [{ text: '⏹️ Выключение', callback_data: 'b650_shutdown' }],
+      [{ text: '🔄 Перезагрузка', callback_data: 'b650_reboot' }],
+      [
+        { text: '💾 Диск', callback_data: 'b650_disk' },
+        { text: '⚙️ Процессы', callback_data: 'b650_processes' }
+      ],
+      [
+        { text: '📊 Статус', callback_data: 'b650_status' }
+      ],
       [{ text: '⬅️ Назад', callback_data: 'menu_home' }]
     ]
   };
@@ -572,6 +616,62 @@ bot.on('callback_query', async (query) => {
       } catch (err) {
         console.error(`[WoL] Error:`, err);
         bot.sendMessage(chatId, '❌ Ошибка: ' + err.message);
+      }
+      break;
+
+    case 'b650_shutdown':
+      try {
+        await executeSSHOnWindows('shutdown /s /t 0');
+        bot.sendMessage(chatId, '✅ dmd-b650 выключается...');
+      } catch (err) {
+        bot.sendMessage(chatId, '❌ Ошибка: ' + err.message);
+      }
+      break;
+
+    case 'b650_reboot':
+      try {
+        await executeSSHOnWindows('shutdown /r /t 0');
+        bot.sendMessage(chatId, '✅ dmd-b650 перезагружается...');
+      } catch (err) {
+        bot.sendMessage(chatId, '❌ Ошибка: ' + err.message);
+      }
+      break;
+
+    case 'b650_status':
+      try {
+        const uptime = await executeSSHOnWindows('powershell -Command "(Get-Date) - (Get-CimInstance Win32_OperatingSystem).LastBootUpTime | Select-Object -ExpandProperty ToString');
+        const mem = await executeSSHOnWindows('powershell -Command "$os=Get-CimInstance Win32_OperatingSystem; [math]::Round(($os.TotalVisibleMemorySize-$os.FreePhysicalMemory)/$os.TotalVisibleMemorySize*100,1)"');
+        bot.sendMessage(chatId, `📊 <b>dmd-b650</b>\n\n⏱️ Uptime: ${uptime.trim()}\n💾 RAM: ${mem.trim()}%`, {
+          parse_mode: 'HTML',
+          reply_markup: getB650Keyboard()
+        });
+      } catch (err) {
+        bot.sendMessage(chatId, '❌ Сервер недоступен');
+      }
+      break;
+
+    case 'b650_disk':
+      try {
+        const disk = await executeSSHOnWindows('powershell -Command "Get-PSDrive C | Select-Object @{N=\'Used\';E={[math]::Round($_.Used/1GB,1)}}, @{N=\'Free\';E={[math]::Round($_.Free/1GB,1)}}, @{N=\'Total\';E={[math]::Round(($_.Used+$_.Free)/1GB,1)}} | ConvertTo-Json"');
+        const d = JSON.parse(disk);
+        bot.sendMessage(chatId, `💾 <b>dmd-b650 — Диск</b>\n\nВсего: ${d.Total} GB\nЗанято: ${d.Used} GB\nСвободно: ${d.Free} GB`, {
+          parse_mode: 'HTML',
+          reply_markup: getB650Keyboard()
+        });
+      } catch (err) {
+        bot.sendMessage(chatId, '❌ Сервер недоступен');
+      }
+      break;
+
+    case 'b650_processes':
+      try {
+        const procs = await executeSSHOnWindows('powershell -Command "Get-Process | Sort-Object CPU -Descending | Select-Object -First 8 Name, @{N=\'CPU\';E={[math]::Round($_.CPU,1)}}, @{N=\'RAM_MB\';E={[math]::Round($_.WorkingSet64/1MB,1)}} | Format-Table -AutoSize"');
+        bot.sendMessage(chatId, `⚙️ <b>dmd-b650 — Топ процессов</b>\n\n<pre>${procs}</pre>`, {
+          parse_mode: 'HTML',
+          reply_markup: getB650Keyboard()
+        });
+      } catch (err) {
+        bot.sendMessage(chatId, '❌ Сервер недоступен');
       }
       break;
 
