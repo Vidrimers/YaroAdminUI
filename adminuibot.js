@@ -323,7 +323,7 @@ function executeSSHOnWindows(command) {
 
     conn.on('ready', () => {
       // VPS → router tunnel → Windows
-      conn.exec(`ssh -o StrictHostKeyChecking=no -i /root/.ssh/vps_to_local -p 2222 root@127.0.0.1 "dbclient -y -i /root/.ssh/router_to_vps vidri@10.0.0.2 '${command}'"`, (err, stream) => {
+      conn.exec(`ssh -o StrictHostKeyChecking=no -i /root/.ssh/vps_to_local -p 2222 root@127.0.0.1 "dbclient -y -i /root/.ssh/router_to_vps vidri@10.0.0.2 ${command}"`, (err, stream) => {
         if (err) { conn.end(); return reject(err); }
         let output = '';
         let errorOutput = '';
@@ -639,14 +639,14 @@ bot.on('callback_query', async (query) => {
 
     case 'b650_status':
       try {
-        const uptime = await executeSSHOnWindows('powershell -Command "(Get-Date) - (Get-CimInstance Win32_OperatingSystem).LastBootUpTime | Select-Object -ExpandProperty ToString');
+        const uptime = await executeSSHOnWindows('powershell -Command (Get-CimInstance Win32_OperatingSystem).LastBootUpTime');
         const mem = await executeSSHOnWindows('powershell -Command "$os=Get-CimInstance Win32_OperatingSystem; [math]::Round(($os.TotalVisibleMemorySize-$os.FreePhysicalMemory)/$os.TotalVisibleMemorySize*100,1)"');
-        bot.sendMessage(chatId, `📊 <b>dmd-b650</b>\n\n⏱️ Uptime: ${uptime.trim()}\n💾 RAM: ${mem.trim()}%`, {
+        bot.sendMessage(chatId, `📊 <b>dmd-b650</b>\n\n⏱️ Last boot: ${uptime.trim()}\n💾 RAM: ${mem.trim()}%`, {
           parse_mode: 'HTML',
           reply_markup: getB650Keyboard()
         });
       } catch (err) {
-        bot.sendMessage(chatId, '❌ Сервер недоступен');
+        bot.sendMessage(chatId, '❌ Сервер недоступен: ' + err.message);
       }
       break;
 
@@ -659,7 +659,7 @@ bot.on('callback_query', async (query) => {
           reply_markup: getB650Keyboard()
         });
       } catch (err) {
-        bot.sendMessage(chatId, '❌ Сервер недоступен');
+        bot.sendMessage(chatId, '❌ Сервер недоступен: ' + err.message);
       }
       break;
 
@@ -671,7 +671,7 @@ bot.on('callback_query', async (query) => {
           reply_markup: getB650Keyboard()
         });
       } catch (err) {
-        bot.sendMessage(chatId, '❌ Сервер недоступен');
+        bot.sendMessage(chatId, '❌ Сервер недоступен: ' + err.message);
       }
       break;
 
