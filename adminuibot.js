@@ -668,13 +668,9 @@ bot.on('callback_query', async (query) => {
 
     case 'b650_processes':
       try {
-        const procs = await executeSSHOnWindows('powershell -Command "Get-Process | Sort CPU -Desc | Select -First 10 Name,CPU,@{N=\'RAM\';E={[math]::Round($_.WorkingSet/1MB)}} | ConvertTo-Json"');
-        const procList = JSON.parse(procs);
-        let msg = `⚙️ <b>dmd-b650 — Топ процессов</b>\n\n`;
-        procList.forEach((p, i) => {
-          msg += `${i+1}. <b>${p.Name}</b> — CPU: ${p.CPU || 0}s, RAM: ${p.RAM}MB\n`;
-        });
-        bot.sendMessage(chatId, msg, {
+        const procs = await executeSSHOnWindows('powershell -Command Get-Process');
+        const lines = procs.split('\n').filter(l => l.trim()).slice(0, 12).join('\n');
+        bot.sendMessage(chatId, `⚙️ <b>dmd-b650 — Процессы</b>\n\n<pre>${lines}</pre>`, {
           parse_mode: 'HTML',
           reply_markup: getB650Keyboard()
         });
