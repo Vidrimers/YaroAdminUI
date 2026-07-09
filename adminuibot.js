@@ -499,12 +499,14 @@ function getB650Keyboard() {
 }
 
 // b650 network submenu
-function getB650NetKeyboard() {
+function getB650NetKeyboard(autoRestart) {
+  const status = autoRestart ? '🟢 ВКЛ' : '🔴 ВЫКЛ';
   return {
     inline_keyboard: [
+      [{ text: `🔄 Авто-перезапуск: ${status}`, callback_data: 'b650_net_toggle' }],
+      [{ text: '🔄 Перезапуск адаптера', callback_data: 'b650_net_restart' }],
       [{ text: '📡 Статус адаптера', callback_data: 'b650_net_status' }],
       [{ text: '🌍 Проверка интернета', callback_data: 'b650_net_check' }],
-      [{ text: '🔄 Перезапуск адаптера', callback_data: 'b650_net_restart' }],
       [{ text: '⬅️ Назад', callback_data: 'home_b650' }]
     ]
   };
@@ -535,15 +537,27 @@ function pollServerOnline(chatId, ip, name, attempts = 0) {
   }
   setTimeout(async () => {
     try {
-      // Use nc to check if SSH port is open (simpler than ping through dbclient)
       await execAsync(`ssh -o StrictHostKeyChecking=no -i /root/.ssh/vps_to_local -p 2222 root@127.0.0.1 'dbclient -y -i /root/.ssh/router_to_vps vidri@${ip} hostname'`);
       console.log(`[Poll] ${name} (${ip}) is online after ${attempts * 10}s`);
       bot.sendMessage(chatId, `🟢 ${name} (${ip}) включился!`);
     } catch (err) {
-      // Still offline, keep polling
       pollServerOnline(chatId, ip, name, attempts + 1);
     }
-  }, 10000); // Check every 10 seconds
+  }, 10000);
+}
+
+// Auto-restart state for b650 network adapter
+const B650_AUTORESTART_FILE = '/tmp/b650_autorestart.json';
+async function getB650AutoRestart() {
+  try {
+    const { stdout } = await execAsync(`cat ${B650_AUTORESTART_FILE} 2>/dev/null || echo '{"enabled":false}'`);
+    return JSON.parse(stdout.trim());
+  } catch {
+    return { enabled: false };
+  }
+}
+async function setB650AutoRestart(enabled) {
+  await execAsync(`echo '{"enabled":${enabled}}' > ${B650_AUTORESTART_FILE}`);
 }
 
 // ============ CALLBACK QUERY HANDLER ============
@@ -690,14 +704,29 @@ bot.on('callback_query', async (query) => {
       break;
 
     // ============ B650 NETWORK ============
-    case 'b650_net_menu':
+    case 'b650_net_menu': {
+      const state = await getB650AutoRestart();
       bot.editMessageText('🌐 <b>Сеть dmd-b650</b>', {
         chat_id: chatId,
         message_id: query.message.message_id,
         parse_mode: 'HTML',
-        reply_markup: getB650NetKeyboard()
+        reply_markup: getB650NetKeyboard(state.enabled)
       });
       break;
+    }
+
+    case 'b650_net_toggle': {
+      const state = await getB650AutoRestart();
+      const newState = !state.enabled;
+      await setB650AutoRestart(newState);
+      bot.answerCallbackQuery(query.id, { text: newState ? 'Авто-перезапуск ВКЛ' : 'Авто-перезапуск ВЫКЛ' });
+      bot.editMessageReplyMarkup({
+        chat_id: chatId,
+        message_id: query.message.message_id,
+        reply_markup: getB650NetKeyboard(newState)
+      });
+      break;
+    }
 
     case 'b650_net_status':
       try {
@@ -706,7 +735,7 @@ bot.on('callback_query', async (query) => {
         const ip = await executeSSHOnWindows('powershell -Command Get-NetIPAddress -AddressFamily IPv4 | Where IPAddress -notlike 127.* | Select -Expand IPAddress');
         bot.sendMessage(chatId, `📡 <b>Адаптер:</b> ${a.Name}\n🔗 MAC: ${a.MacAddress}\n📶 Скорость: ${a.LinkSpeed}\n🌐 IP: ${ip.trim()}\n📶 Статус: ${a.Status}`, {
           parse_mode: 'HTML',
-          reply_markup: getB650NetKeyboard()
+          reply_markup: getB650NetKeyboard((await getB650AutoRestart()).enabled)
         });
       } catch (err) {
         bot.sendMessage(chatId, '❌ Ошибка: ' + err.message);
@@ -718,7 +747,7 @@ bot.on('callback_query', async (query) => {
         const result = await executeSSHOnWindows('powershell -Command Test-Connection 8.8.8.8 -Count 2 -Quiet');
         const ok = result.trim().toLowerCase() === 'true';
         bot.sendMessage(chatId, ok ? '🌍 Интернет работает!' : '❌ Интернет недоступен', {
-          reply_markup: getB650NetKeyboard()
+          reply_markup: getB650NetKeyboard((await getB650AutoRestart()).enabled)
         });
       } catch (err) {
         bot.sendMessage(chatId, '❌ Ошибка: ' + err.message);
@@ -731,7 +760,7 @@ bot.on('callback_query', async (query) => {
         await new Promise(r => setTimeout(r, 2000));
         await executeSSHOnWindows('powershell -Command Enable-NetAdapter RustyBunker -Confirm:0');
         bot.sendMessage(chatId, '🔄 Адаптер RustyBunker перезапущен', {
-          reply_markup: getB650NetKeyboard()
+          reply_markup: getB650NetKeyboard((await getB650AutoRestart()).enabled)
         });
       } catch (err) {
         bot.sendMessage(chatId, '❌ Ошибка: ' + err.message);
