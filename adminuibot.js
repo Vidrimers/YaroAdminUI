@@ -282,8 +282,8 @@ function executeSSHOnServer(host, command) {
     }
 
     conn.on('ready', () => {
-      // SSH from VPS to local server
-      conn.exec(`ssh -o StrictHostKeyChecking=no vidrimers@${host} "${command}"`, (err, stream) => {
+      // SSH from VPS to local server using vps_to_local key
+      conn.exec(`ssh -i /root/.ssh/vps_to_local -o StrictHostKeyChecking=no vidrimers@${host} "${command}"`, (err, stream) => {
         if (err) { conn.end(); return reject(err); }
         let output = '';
         let errorOutput = '';
