@@ -4,8 +4,12 @@ import dotenv from "dotenv";
 import sqlite3 from "sqlite3";
 import https from "https";
 import { Client as SSHClient } from "ssh2";
+import { exec } from "child_process";
+import { promisify } from "util";
 import fs from "fs";
 import os from "os";
+
+const execAsync = promisify(exec);
 
 dotenv.config();
 
@@ -534,7 +538,7 @@ bot.on('callback_query', async (query) => {
     // ============ WAKE ON LAN ============
     case 'intel_wake':
       try {
-        await executeSSHCommand(`wakeonlan -i ${SERVERS.intel.ip} ${SERVERS.intel.mac}`);
+        await execAsync(`wakeonlan -i ${SERVERS.intel.ip} ${SERVERS.intel.mac}`);
         bot.answerCallbackQuery(query.id, { text: '✅ Сигнал отправлен на Server Intel!' });
       } catch (err) {
         bot.answerCallbackQuery(query.id, { text: '❌ Ошибка: ' + err.message, show_alert: true });
@@ -542,7 +546,7 @@ bot.on('callback_query', async (query) => {
       break;
     case 'r3_wake':
       try {
-        await executeSSHCommand(`wakeonlan -i ${SERVERS.r3.ip} ${SERVERS.r3.mac}`);
+        await execAsync(`wakeonlan -i ${SERVERS.r3.ip} ${SERVERS.r3.mac}`);
         bot.answerCallbackQuery(query.id, { text: '✅ Сигнал отправлен на Server R3!' });
       } catch (err) {
         bot.answerCallbackQuery(query.id, { text: '❌ Ошибка: ' + err.message, show_alert: true });
@@ -550,7 +554,7 @@ bot.on('callback_query', async (query) => {
       break;
     case 'all_wake':
       try {
-        await executeSSHCommand(`wakeonlan -i ${SERVERS.intel.ip} ${SERVERS.intel.mac} && wakeonlan -i ${SERVERS.r3.ip} ${SERVERS.r3.mac}`);
+        await execAsync(`wakeonlan -i ${SERVERS.intel.ip} ${SERVERS.intel.mac} && wakeonlan -i ${SERVERS.r3.ip} ${SERVERS.r3.mac}`);
         bot.answerCallbackQuery(query.id, { text: '✅ Сигнал отправлен на оба сервера!' });
       } catch (err) {
         bot.answerCallbackQuery(query.id, { text: '❌ Ошибка: ' + err.message, show_alert: true });
