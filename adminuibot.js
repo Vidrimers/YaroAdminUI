@@ -732,10 +732,11 @@ bot.on('callback_query', async (query) => {
 
     case 'b650_net_status':
       try {
-        const adapter = await executeSSHOnWindows('powershell -Command Get-NetAdapter | Where Status -eq Up | Select Name,MacAddress,LinkSpeed,Status | ConvertTo-Json');
+        const adapter = await executeSSHOnWindows('powershell -Command Get-NetAdapter | Where Status -eq Up | Select Name,MacAddress,LinkSpeed,Status | ConvertTo-Json -Compress');
         const a = JSON.parse(adapter);
         const ip = await executeSSHOnWindows('powershell -Command Get-NetIPAddress -AddressFamily IPv4 | Where IPAddress -notlike 127.* | Select -Expand IPAddress');
-        bot.sendMessage(chatId, `📡 <b>Адаптер:</b> ${a.Name}\n🔗 MAC: ${a.MacAddress}\n📶 Скорость: ${a.LinkSpeed}\n🌐 IP: ${ip.trim()}\n📶 Статус: ${a.Status}`, {
+        const status = Array.isArray(a) ? a[0] : a;
+        bot.sendMessage(chatId, `📡 <b>Адаптер:</b> ${status.Name}\n🔗 MAC: ${status.MacAddress}\n📶 Скорость: ${status.LinkSpeed}\n🌐 IP: ${ip.trim()}\n📶 Статус: ${status.Status}`, {
           parse_mode: 'HTML',
           reply_markup: getB650NetKeyboard((await getB650AutoRestart()).enabled)
         });
