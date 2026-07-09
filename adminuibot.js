@@ -483,16 +483,45 @@ function getB650Keyboard() {
   return {
     inline_keyboard: [
       [{ text: '▶️ Включение (WoL)', callback_data: 'b650_wake' }],
-      [{ text: '⏹️ Выключение', callback_data: 'b650_shutdown' }],
+      [{ text: '⏹️ Выключение', callback_data: 'b650_off_menu' }],
       [{ text: '🔄 Перезагрузка', callback_data: 'b650_reboot' }],
       [
         { text: '💾 Диск', callback_data: 'b650_disk' },
         { text: '⚙️ Процессы', callback_data: 'b650_processes' }
       ],
       [
-        { text: '📊 Статус', callback_data: 'b650_status' }
+        { text: '📊 Статус', callback_data: 'b650_status' },
+        { text: '🌐 Сеть', callback_data: 'b650_net_menu' }
       ],
       [{ text: '⬅️ Назад', callback_data: 'menu_home' }]
+    ]
+  };
+}
+
+// b650 network submenu
+function getB650NetKeyboard() {
+  return {
+    inline_keyboard: [
+      [{ text: '📡 Статус адаптера', callback_data: 'b650_net_status' }],
+      [{ text: '🌍 Проверка интернета', callback_data: 'b650_net_check' }],
+      [{ text: '🔄 Перезапуск адаптера', callback_data: 'b650_net_restart' }],
+      [{ text: '⬅️ Назад', callback_data: 'home_b650' }]
+    ]
+  };
+}
+
+// b650 shutdown submenu
+function getB650OffKeyboard() {
+  return {
+    inline_keyboard: [
+      [{ text: '⏹️ Сейчас', callback_data: 'b650_off_0' }],
+      [{ text: '⏱ 30 мин', callback_data: 'b650_off_1800' }],
+      [{ text: '⏱ 1 час', callback_data: 'b650_off_3600' }],
+      [{ text: '⏱ 2 часа', callback_data: 'b650_off_7200' }],
+      [{ text: '⏱ 3 часа', callback_data: 'b650_off_10800' }],
+      [{ text: '⏱ 4 часа', callback_data: 'b650_off_14400' }],
+      [{ text: '❌ Отмена', callback_data: 'b650_off_cancel' }],
+      [{ text: '⬅️ Назад', callback_data: 'home_b650' }]
     ]
   };
 }
@@ -621,13 +650,97 @@ bot.on('callback_query', async (query) => {
       }
       break;
 
-    case 'b650_shutdown':
+    case 'b650_off_menu':
+      bot.editMessageText('⏹️ <b>Выключение dmd-b650</b>\n\nВыберите через сколько выключить:', {
+        chat_id: chatId,
+        message_id: query.message.message_id,
+        parse_mode: 'HTML',
+        reply_markup: getB650OffKeyboard()
+      });
+      break;
+
+    case 'b650_off_0':
+    case 'b650_off_1800':
+    case 'b650_off_3600':
+    case 'b650_off_7200':
+    case 'b650_off_10800':
+    case 'b650_off_14400':
       try {
-        await executeSSHOnWindows('shutdown /s /t 0');
-        bot.sendMessage(chatId, '✅ dmd-b650 выключается...');
+        const seconds = parseInt(data.split('_')[2]);
+        const label = seconds === 0 ? 'сейчас' : `${seconds / 60} мин`;
+        await executeSSHOnWindows(`shutdown /s /t ${seconds}`);
+        bot.sendMessage(chatId, `⏹️ dmd-b650 выключается ${label}...`);
       } catch (err) {
         bot.sendMessage(chatId, '❌ Ошибка: ' + err.message);
       }
+      break;
+
+    case 'b650_off_cancel':
+      try {
+        await executeSSHOnWindows('shutdown /a');
+        bot.sendMessage(chatId, '❌ Выключение отменено');
+      } catch (err) {
+        bot.sendMessage(chatId, '❌ Ошибка: ' + err.message);
+      }
+      break;
+
+    // ============ B650 NETWORK ============
+    case 'b650_net_menu':
+      bot.editMessageText('🌐 <b>Сеть dmd-b650</b>', {
+        chat_id: chatId,
+        message_id: query.message.message_id,
+        parse_mode: 'HTML',
+        reply_markup: getB650NetKeyboard()
+      });
+      break;
+
+    case 'b650_net_status':
+      try {
+        const adapter = await executeSSHOnWindows('powershell -Command Get-NetAdapter | Where Status -eq Up | Select Name,MacAddress,LinkSpeed,Status | ConvertTo-Json');
+        const a = JSON.parse(adapter);
+        const ip = await executeSSHOnWindows('powershell -Command Get-NetIPAddress -AddressFamily IPv4 | Where IPAddress -notlike 127.* | Select -Expand IPAddress');
+        bot.sendMessage(chatId, `📡 <b>Адаптер:</b> ${a.Name}\n🔗 MAC: ${a.MacAddress}\n📶 Скорость: ${a.LinkSpeed}\n🌐 IP: ${ip.trim()}\n📶 Статус: ${a.Status}`, {
+          parse_mode: 'HTML',
+          reply_markup: getB650NetKeyboard()
+        });
+      } catch (err) {
+        bot.sendMessage(chatId, '❌ Ошибка: ' + err.message);
+      }
+      break;
+
+    case 'b650_net_check':
+      try {
+        const result = await executeSSHOnWindows('powershell -Command Test-Connection 8.8.8.8 -Count 2 -Quiet');
+        const ok = result.trim().toLowerCase() === 'true';
+        bot.sendMessage(chatId, ok ? '🌍 Интернет работает!' : '❌ Интернет недоступен', {
+          reply_markup: getB650NetKeyboard()
+        });
+      } catch (err) {
+        bot.sendMessage(chatId, '❌ Ошибка: ' + err.message);
+      }
+      break;
+
+    case 'b650_net_restart':
+      try {
+        await executeSSHOnWindows('powershell -Command Disable-NetAdapter RustyBunker -Confirm:$false');
+        await new Promise(r => setTimeout(r, 2000));
+        await executeSSHOnWindows('powershell -Command Enable-NetAdapter RustyBunker -Confirm:$false');
+        bot.sendMessage(chatId, '🔄 Адаптер RustyBunker перезапущен', {
+          reply_markup: getB650NetKeyboard()
+        });
+      } catch (err) {
+        bot.sendMessage(chatId, '❌ Ошибка: ' + err.message);
+      }
+      break;
+
+    case 'b650_shutdown':
+      // Legacy handler - redirect to menu
+      bot.editMessageText('⏹️ <b>Выключение dmd-b650</b>\n\nВыберите через сколько выключить:', {
+        chat_id: chatId,
+        message_id: query.message.message_id,
+        parse_mode: 'HTML',
+        reply_markup: getB650OffKeyboard()
+      });
       break;
 
     case 'b650_reboot':
