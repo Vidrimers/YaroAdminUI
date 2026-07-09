@@ -306,11 +306,11 @@ function executeSSHOnServer(host, command) {
 // SSH to Windows PC (10.0.0.2) via VPS → router tunnel
 // Uses powershell -EncodedCommand with base64 to bypass shell escaping
 async function executeSSHOnWindows(command) {
+  // command should be a raw PowerShell cmdlet, NOT "powershell -Command ..."
   const b64 = Buffer.from(command, 'utf16le').toString('base64');
   const fullCmd = `ssh -o StrictHostKeyChecking=no -i /root/.ssh/vps_to_local -p 2222 root@127.0.0.1 'dbclient -y -i /root/.ssh/router_to_vps vidri@10.0.0.2 powershell -EncodedCommand ${b64}'`;
   const { stdout } = await execAsync(fullCmd);
   let output = stdout;
-  // Strip CLIXML wrapper and progress messages
   if (output.includes('CLIXML') || output.includes('<Obj')) {
     const clean = [];
     for (const line of output.split('\n')) {
@@ -747,10 +747,10 @@ bot.on('callback_query', async (query) => {
 
     case 'b650_net_status':
       try {
-        const name = await executeSSHOnWindows('powershell -Command Get-NetAdapter | Where Status -eq Up | Select -ExpandProperty Name');
-        const mac = await executeSSHOnWindows('powershell -Command Get-NetAdapter | Where Status -eq Up | Select -ExpandProperty MacAddress');
-        const speed = await executeSSHOnWindows('powershell -Command Get-NetAdapter | Where Status -eq Up | Select -ExpandProperty LinkSpeed');
-        const ip = await executeSSHOnWindows('powershell -Command Get-NetIPAddress -AddressFamily IPv4 | Where IPAddress -notlike 127.* | Select -Expand IPAddress');
+        const name = await executeSSHOnWindows('Get-NetAdapter | Where Status -eq Up | Select -ExpandProperty Name');
+        const mac = await executeSSHOnWindows('Get-NetAdapter | Where Status -eq Up | Select -ExpandProperty MacAddress');
+        const speed = await executeSSHOnWindows('Get-NetAdapter | Where Status -eq Up | Select -ExpandProperty LinkSpeed');
+        const ip = await executeSSHOnWindows('Get-NetIPAddress -AddressFamily IPv4 | Where IPAddress -notlike 127.* | Select -Expand IPAddress');
         bot.sendMessage(chatId, `📡 <b>Адаптер:</b> ${name.trim()}\n🔗 MAC: ${mac.trim()}\n📶 Скорость: ${speed.trim()}\n🌐 IP: ${ip.trim()}`, {
           parse_mode: 'HTML',
           reply_markup: getB650NetKeyboard((await getB650AutoRestart()).enabled)
@@ -762,7 +762,7 @@ bot.on('callback_query', async (query) => {
 
     case 'b650_net_check':
       try {
-        const result = await executeSSHOnWindows('powershell -Command Test-Connection 8.8.8.8 -Count 2 -Quiet');
+        const result = await executeSSHOnWindows('Test-Connection 8.8.8.8 -Count 2 -Quiet');
         const ok = result.trim().toLowerCase() === 'true';
         bot.sendMessage(chatId, ok ? '🌍 Интернет работает!' : '❌ Интернет недоступен', {
           reply_markup: getB650NetKeyboard((await getB650AutoRestart()).enabled)
@@ -775,7 +775,7 @@ bot.on('callback_query', async (query) => {
     case 'b650_net_restart':
       try {
         // Run in background process so SSH can disconnect after disable
-        await executeSSHOnWindows('powershell -Command Start-Process powershell -ArgumentList "-Command Disable-NetAdapter RustyBunker -Confirm:0; Start-Sleep 5; Enable-NetAdapter RustyBunker -Confirm:0"');
+        await executeSSHOnWindows('Start-Process powershell -ArgumentList "-Command Disable-NetAdapter RustyBunker -Confirm:0; Start-Sleep 5; Enable-NetAdapter RustyBunker -Confirm:0"');
         bot.sendMessage(chatId, '🔄 Адаптер RustyBunker перезапущен (5 сек задержка)', {
           reply_markup: getB650NetKeyboard((await getB650AutoRestart()).enabled)
         });
@@ -805,7 +805,7 @@ bot.on('callback_query', async (query) => {
 
     case 'b650_status':
       try {
-        const sysinfo = await executeSSHOnWindows('powershell -Command systeminfo');
+        const sysinfo = await executeSSHOnWindows('systeminfo');
         const bootLine = sysinfo.split('\n').find(l => l.includes('System Boot Time'));
         const bootStr = bootLine ? bootLine.split(':').slice(1).join(':').trim() : null;
         let uptime = 'N/A';
@@ -818,8 +818,8 @@ bot.on('callback_query', async (query) => {
           const mins = Math.floor((diff % 3600000) / 60000);
           uptime = `${days}d ${hours}h ${mins}m`;
         }
-        const mem = await executeSSHOnWindows('powershell -Command (Get-CimInstance Win32_OperatingSystem).FreePhysicalMemory');
-        const total = await executeSSHOnWindows('powershell -Command (Get-CimInstance Win32_OperatingSystem).TotalVisibleMemorySize');
+        const mem = await executeSSHOnWindows('(Get-CimInstance Win32_OperatingSystem).FreePhysicalMemory');
+        const total = await executeSSHOnWindows('(Get-CimInstance Win32_OperatingSystem).TotalVisibleMemorySize');
         const memPercent = ((parseInt(total.trim()) - parseInt(mem.trim())) / parseInt(total.trim()) * 100).toFixed(1);
         bot.sendMessage(chatId, `📊 <b>dmd-b650</b>\n\n⏱️ Uptime: ${uptime}\n💾 RAM: ${memPercent}%`, {
           parse_mode: 'HTML',
@@ -832,12 +832,15 @@ bot.on('callback_query', async (query) => {
 
     case 'b650_disk':
       try {
-        const used = await executeSSHOnWindows('powershell -Command (Get-PSDrive C).Used');
-        const free = await executeSSHOnWindows('powershell -Command (Get-PSDrive C).Free');
-        const usedGB = (parseInt(used.trim()) / 1073741824).toFixed(1);
-        const freeGB = (parseInt(free.trim()) / 1073741824).toFixed(1);
-        const totalGB = ((parseInt(used.trim()) + parseInt(free.trim())) / 1073741824).toFixed(1);
-        bot.sendMessage(chatId, `💾 <b>dmd-b650 — Диск C:</b>\n\nВсего: ${totalGB} GB\nЗанято: ${usedGB} GB\nСвободно: ${freeGB} GB`, {
+        const cUsed = await executeSSHOnWindows('(Get-PSDrive C).Used');
+        const cFree = await executeSSHOnWindows('(Get-PSDrive C).Free');
+        const dUsed = await executeSSHOnWindows('(Get-PSDrive D).Used');
+        const dFree = await executeSSHOnWindows('(Get-PSDrive D).Free');
+        let msg = `💾 <b>dmd-b650 — Диски</b>\n\n`;
+        const toGB = (v) => (parseInt(v.trim()) / 1073741824).toFixed(1);
+        msg += `💿 <b>C:</b> ${toGB(cUsed)} / ${toGB(cUsed) + toGB(cFree)} GB (${toGB(cFree)} GB свободно)\n`;
+        msg += `💿 <b>D:</b> ${toGB(dUsed)} / ${toGB(dUsed) + toGB(dFree)} GB (${toGB(dFree)} GB свободно)\n`;
+        bot.sendMessage(chatId, msg, {
           parse_mode: 'HTML',
           reply_markup: getB650Keyboard()
         });
@@ -848,7 +851,7 @@ bot.on('callback_query', async (query) => {
 
     case 'b650_processes':
       try {
-        const procs = await executeSSHOnWindows('powershell -Command Get-Process');
+        const procs = await executeSSHOnWindows('Get-Process');
         const lines = procs.split('\n').filter(l => l.trim()).slice(0, 12).join('\n');
         bot.sendMessage(chatId, `⚙️ <b>dmd-b650 — Процессы</b>\n\n<pre>${lines}</pre>`, {
           parse_mode: 'HTML',
