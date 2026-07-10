@@ -825,6 +825,7 @@ bot.on('callback_query', async (query) => {
 
     // ============ B650 NETWORK ============
     case 'b650_net_menu': {
+      bot.answerCallbackQuery(query.id, { text: '⏳ Загрузка...' });
       const state = await getB650AutoRestart();
       let extraMsg = '';
       // If auto-restart is ON, check if NetworkLog.ps1 is running
