@@ -817,6 +817,7 @@ bot.on('callback_query', async (query) => {
       const newState = !state.enabled;
       await setB650AutoRestart(newState);
 
+      let pcStatus = '';
       // Start/stop NetworkLog.ps1 on Windows + manage autostart
       try {
         if (newState) {
@@ -834,11 +835,12 @@ bot.on('callback_query', async (query) => {
         }
       } catch (err) {
         console.log('[NetToggle] Could not start/stop NetworkLog.ps1:', err.message);
-        bot.answerCallbackQuery(query.id, { text: newState ? 'Авто-перезапуск ВКЛ' : 'Авто-перезапуск ВЫКЛ' });
+        pcStatus = '\n\n⚠️ <b>PC недоступен</b> — настройки применятся при включении';
+        bot.answerCallbackQuery(query.id, { text: '⚠️ PC недоступен, настройки применятся при включении' });
       }
 
       const label = newState ? '🟢 ВКЛ' : '🔴 ВЫКЛ';
-      bot.editMessageText(`🌐 <b>Сеть dmd-b650</b>\n\n🔄 Авто-перезапуск: ${label}`, {
+      bot.editMessageText(`🌐 <b>Сеть dmd-b650</b>\n\n🔄 Авто-перезапуск: ${label}${pcStatus}`, {
         chat_id: chatId,
         message_id: query.message.message_id,
         parse_mode: 'HTML',
