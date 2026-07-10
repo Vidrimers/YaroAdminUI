@@ -817,16 +817,20 @@ bot.on('callback_query', async (query) => {
       const newState = !state.enabled;
       await setB650AutoRestart(newState);
 
-      // Start/stop NetworkLog.ps1 on Windows
+      // Start/stop NetworkLog.ps1 on Windows + manage autostart
       try {
         if (newState) {
-          // Start NetworkLog.ps1 in background
+          // Add to Windows autostart via registry
+          await executeSSHOnWindows('New-ItemProperty -Path "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run" -Name "NetworkLog" -Value "powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\\NetworkLogs\\NetworkLog.ps1" -PropertyType String -Force');
+          // Start NetworkLog.ps1 now
           await executeSSHOnWindows('Start-Process powershell -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File C:\\NetworkLogs\\NetworkLog.ps1" -WindowStyle Hidden');
-          bot.answerCallbackQuery(query.id, { text: 'Авто-перезапуск ВКЛ + мониторинг запущен' });
+          bot.answerCallbackQuery(query.id, { text: 'Авто-перезапуск ВКЛ + мониторинг запущен + автозапуск настроен' });
         } else {
-          // Kill only NetworkLog.ps1 process
+          // Remove from Windows autostart
+          await executeSSHOnWindows('Remove-ItemProperty -Path "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run" -Name "NetworkLog" -ErrorAction SilentlyContinue');
+          // Kill NetworkLog.ps1
           await executeSSHOnWindows('Get-CimInstance Win32_Process -Filter "CommandLine LIKE \'%NetworkLog.ps1%\'" | Invoke-CimMethod -MethodName Terminate -ErrorAction SilentlyContinue');
-          bot.answerCallbackQuery(query.id, { text: 'Авто-перезапуск ВЫКЛ + мониторинг остановлен' });
+          bot.answerCallbackQuery(query.id, { text: 'Авто-перезапуск ВЫКЛ + мониторинг остановлен + автозапуск убран' });
         }
       } catch (err) {
         console.log('[NetToggle] Could not start/stop NetworkLog.ps1:', err.message);
