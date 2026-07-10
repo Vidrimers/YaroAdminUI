@@ -851,11 +851,13 @@ bot.on('callback_query', async (query) => {
 
     case 'b650_net_status':
       try {
-        const name = await executeSSHOnWindows('Get-NetAdapter | Where Status -eq Up | Select -ExpandProperty Name');
-        const mac = await executeSSHOnWindows('Get-NetAdapter | Where Status -eq Up | Select -ExpandProperty MacAddress');
-        const speed = await executeSSHOnWindows('Get-NetAdapter | Where Status -eq Up | Select -ExpandProperty LinkSpeed');
-        const ip = await executeSSHOnWindows('Get-NetIPAddress -AddressFamily IPv4 | Where IPAddress -notlike 127.* | Select -Expand IPAddress');
-        bot.sendMessage(chatId, `📡 <b>Адаптер:</b> ${name.trim()}\n🔗 MAC: ${mac.trim()}\n📶 Скорость: ${speed.trim()}\n🌐 IP: ${ip.trim()}`, {
+        const jsonStr = await executeSSHOnWindows(`
+          $a = Get-NetAdapter | Where Status -eq Up | Select-Object -First 1
+          $ip = (Get-NetIPAddress -AddressFamily IPv4 | Where IPAddress -notlike 127.* | Select-Object -First 1).IPAddress
+          @{Name=$a.Name;Mac=$a.MacAddress;Speed=$a.LinkSpeed;IP=$ip} | ConvertTo-Json -Compress
+        `);
+        const d = JSON.parse(jsonStr.trim());
+        bot.sendMessage(chatId, `📡 <b>Адаптер:</b> ${d.Name}\n🔗 MAC: ${d.Mac}\n📶 Скорость: ${d.Speed}\n🌐 IP: ${d.IP}`, {
           parse_mode: 'HTML',
           reply_markup: getB650NetKeyboard((await getB650AutoRestart()).enabled)
         });
@@ -890,19 +892,18 @@ bot.on('callback_query', async (query) => {
 
     case 'b650_net_report':
       try {
-        // Get current adapter state and build HTML report directly
-        const name = await executeSSHOnWindows('Get-NetAdapter | Where Status -eq Up | Select -ExpandProperty Name');
-        const mac = await executeSSHOnWindows('Get-NetAdapter | Where Status -eq Up | Select -ExpandProperty MacAddress');
-        const speed = await executeSSHOnWindows('Get-NetAdapter | Where Status -eq Up | Select -ExpandProperty LinkSpeed');
-        const ip = await executeSSHOnWindows('Get-NetIPAddress -AddressFamily IPv4 | Where IPAddress -notlike 127.* | Select -Expand IPAddress');
-        const inetOk = await executeSSHOnWindows('Test-Connection 8.8.8.8 -Count 2 -Quiet');
-        const status = await executeSSHOnWindows('Get-NetAdapter | Where Status -eq Up | Select -ExpandProperty Status');
-        const connState = await executeSSHOnWindows('Get-NetAdapter | Where Status -eq Up | Select -ExpandProperty MediaConnectionState');
-        const now = new Date().toISOString().replace('T', ' ').slice(0, 19);
-
-        const inet = inetOk.trim().toLowerCase() === 'true';
+        // Single SSH call — get all adapter data as JSON
+        const jsonStr = await executeSSHOnWindows(`
+          $a = Get-NetAdapter | Where Status -eq Up | Select-Object -First 1
+          $ip = (Get-NetIPAddress -AddressFamily IPv4 | Where IPAddress -notlike 127.* | Select-Object -First 1).IPAddress
+          $inet = Test-Connection 8.8.8.8 -Count 2 -Quiet
+          @{Name=$a.Name;Mac=$a.MacAddress;Speed=$a.LinkSpeed;Status=$a.Status;Conn=$a.MediaConnectionState;IP=$ip;Internet=$inet} | ConvertTo-Json -Compress
+        `);
+        const data = JSON.parse(jsonStr.trim());
+        const inet = data.Internet === true || data.Internet === 'True';
         const statusColor = inet ? '#4caf50' : '#f44336';
         const statusText = inet ? 'OK' : 'DOWN';
+        const now = new Date().toISOString().replace('T', ' ').slice(0, 19);
 
         const html = `<!DOCTYPE html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -928,12 +929,12 @@ h1{text-align:center;font-size:22px;margin:16px 0;color:#333}
 </div>
 <div class="card">
 <div class="row"><span class="label">Time:</span><span class="value">${now}</span></div>
-<div class="row"><span class="label">Adapter:</span><span class="value">${name.trim()}</span></div>
-<div class="row"><span class="label">Status:</span><span class="value">${status.trim()}</span></div>
-<div class="row"><span class="label">Connection:</span><span class="value">${connState.trim()}</span></div>
-<div class="row"><span class="label">MAC:</span><span class="value">${mac.trim()}</span></div>
-<div class="row"><span class="label">Speed:</span><span class="value">${speed.trim()}</span></div>
-<div class="row"><span class="label">IP:</span><span class="value">${ip.trim()}</span></div>
+<div class="row"><span class="label">Adapter:</span><span class="value">${data.Name}</span></div>
+<div class="row"><span class="label">Status:</span><span class="value">${data.Status}</span></div>
+<div class="row"><span class="label">Connection:</span><span class="value">${data.Conn}</span></div>
+<div class="row"><span class="label">MAC:</span><span class="value">${data.Mac}</span></div>
+<div class="row"><span class="label">Speed:</span><span class="value">${data.Speed}</span></div>
+<div class="row"><span class="label">IP:</span><span class="value">${data.IP}</span></div>
 <div class="row"><span class="label">Internet:</span><span class="value" style="color:${statusColor}">${statusText}</span></div>
 </div>
 <div class="footer">Generated by YaroAdminUI</div>
@@ -989,23 +990,15 @@ h1{text-align:center;font-size:22px;margin:16px 0;color:#333}
 
     case 'b650_status':
       try {
-        const sysinfo = await executeSSHOnWindows('systeminfo');
-        const bootLine = sysinfo.split('\n').find(l => l.includes('System Boot Time'));
-        const bootStr = bootLine ? bootLine.split(':').slice(1).join(':').trim() : null;
-        let uptime = 'N/A';
-        if (bootStr) {
-          const bootTime = new Date(bootStr);
-          const now = new Date();
-          const diff = now - bootTime;
-          const days = Math.floor(diff / 86400000);
-          const hours = Math.floor((diff % 86400000) / 3600000);
-          const mins = Math.floor((diff % 3600000) / 60000);
-          uptime = `${days}d ${hours}h ${mins}m`;
-        }
-        const mem = await executeSSHOnWindows('(Get-CimInstance Win32_OperatingSystem).FreePhysicalMemory');
-        const total = await executeSSHOnWindows('(Get-CimInstance Win32_OperatingSystem).TotalVisibleMemorySize');
-        const memPercent = ((parseInt(total.trim()) - parseInt(mem.trim())) / parseInt(total.trim()) * 100).toFixed(1);
-        bot.sendMessage(chatId, `📊 <b>dmd-b650</b>\n\n⏱️ Uptime: ${uptime}\n💾 RAM: ${memPercent}%`, {
+        const jsonStr = await executeSSHOnWindows(`
+          $os = Get-CimInstance Win32_OperatingSystem
+          $boot = $os.LastBootUpTime
+          $up = (Get-Date) - $boot
+          $memPct = [math]::Round(($os.TotalVisibleMemorySize - $os.FreePhysicalMemory) / $os.TotalVisibleMemorySize * 100, 1)
+          @{Uptime="$($up.Days)d $($up.Hours)h $($up.Minutes)m";RAM="$memPct%"} | ConvertTo-Json -Compress
+        `);
+        const d = JSON.parse(jsonStr.trim());
+        bot.sendMessage(chatId, `📊 <b>dmd-b650</b>\n\n⏱️ Uptime: ${d.Uptime}\n💾 RAM: ${d.RAM}`, {
           parse_mode: 'HTML',
           reply_markup: getB650Keyboard()
         });
