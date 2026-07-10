@@ -341,14 +341,37 @@ function executeOnRouter(command) {
 // SSH to Windows PC (10.0.0.2) via VPS → router tunnel
 // Uses powershell -EncodedCommand with base64 to bypass shell escaping
 async function executeSSHOnWindows(command, retries = 2) {
-  // command should be a raw PowerShell cmdlet, NOT "powershell -Command ..."
   const b64 = Buffer.from(command, 'utf16le').toString('base64');
   const fullCmd = `ssh -o StrictHostKeyChecking=no -i /root/.ssh/vps_to_local -p 2222 root@127.0.0.1 'dbclient -y -i /root/.ssh/router_to_vps vidri@10.0.0.2 powershell -EncodedCommand ${b64}'`;
   let lastErr;
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
-      const { stdout } = await execAsync(fullCmd);
-      let output = stdout;
+      const output = await new Promise((resolve, reject) => {
+        const conn = new SSHClient();
+        const sshKeyPath = (process.env.SSH_KEY_PATH || `${os.homedir()}/.ssh/id_rsa`).replace(/^~/, os.homedir());
+        const connConfig = {
+          host: SERVER_IP, port: 22,
+          username: process.env.SSH_USERNAME || 'root'
+        };
+        if (process.env.SSH_PASSWORD) connConfig.password = process.env.SSH_PASSWORD;
+        if (fs.existsSync(sshKeyPath)) {
+          try { connConfig.privateKey = fs.readFileSync(sshKeyPath); } catch (e) {}
+        }
+        conn.on('ready', () => {
+          conn.exec(fullCmd, (err, stream) => {
+            if (err) { conn.end(); return reject(err); }
+            let out = '';
+            let errOut = '';
+            stream.on('close', (code) => {
+              conn.end();
+              if (code !== 0 && errOut) reject(new Error(errOut));
+              else resolve(out);
+            }).on('data', (d) => { out += d.toString(); })
+              .stderr.on('data', (d) => { errOut += d.toString(); });
+          });
+        }).on('error', reject).connect(connConfig);
+      });
+      // Clean CLIXML
       if (output.includes('CLIXML') || output.includes('<Obj')) {
         const clean = [];
         for (const line of output.split('\n')) {
@@ -367,9 +390,9 @@ async function executeSSHOnWindows(command, retries = 2) {
           }
           if (!t.startsWith('<')) clean.push(t);
         }
-        output = clean.join('\n').trim();
+        return clean.join('\n').trim();
       }
-      return output;
+      return output.trim();
     } catch (err) {
       lastErr = err;
       if (attempt < retries) {
