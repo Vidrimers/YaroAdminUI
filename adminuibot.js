@@ -692,9 +692,6 @@ bot.on('callback_query', async (query) => {
     return;
   }
 
-  // Answer callback to remove loading state
-  bot.answerCallbackQuery(query.id);
-
   // Route to appropriate handler
   switch (data) {
     case 'menu_auth_code':
@@ -1301,6 +1298,8 @@ h1{text-align:center;font-size:22px;margin:16px 0;color:#333}
       break;
     }
   }
+  // Fallback: answer callback if handler didn't (removes loading spinner)
+  bot.answerCallbackQuery(query.id);
 });
 
 bot.on("message", async (msg) => {
