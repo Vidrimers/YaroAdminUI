@@ -303,6 +303,41 @@ function executeSSHOnServer(host, command) {
   });
 }
 
+// SSH to router via VPS (for commands like wakeonlan that live on the router)
+function executeOnRouter(command) {
+  return new Promise((resolve, reject) => {
+    const conn = new SSHClient();
+    const sshKeyPath = (process.env.SSH_KEY_PATH || `${os.homedir()}/.ssh/id_rsa`).replace(/^~/, os.homedir());
+    const sshPassword = process.env.SSH_PASSWORD;
+
+    const connConfig = {
+      host: SERVER_IP,
+      port: 22,
+      username: process.env.SSH_USERNAME || 'root'
+    };
+
+    if (sshPassword) connConfig.password = sshPassword;
+    if (fs.existsSync(sshKeyPath)) {
+      try { connConfig.privateKey = fs.readFileSync(sshKeyPath); } catch (e) {}
+    }
+
+    conn.on('ready', () => {
+      // Connect from VPS to router via SSH tunnel on port 2222
+      conn.exec(`ssh -o StrictHostKeyChecking=no -i /root/.ssh/vps_to_local -p 2222 root@127.0.0.1 "${command}"`, (err, stream) => {
+        if (err) { conn.end(); return reject(err); }
+        let output = '';
+        let errorOutput = '';
+        stream.on('close', (code) => {
+          conn.end();
+          if (code !== 0 && errorOutput) reject(new Error(errorOutput));
+          else resolve(output);
+        }).on('data', (data) => { output += data.toString(); })
+          .stderr.on('data', (data) => { errorOutput += data.toString(); });
+      });
+    }).on('error', reject).connect(connConfig);
+  });
+}
+
 // SSH to Windows PC (10.0.0.2) via VPS → router tunnel
 // Uses powershell -EncodedCommand with base64 to bypass shell escaping
 async function executeSSHOnWindows(command) {
@@ -544,6 +579,40 @@ function getB650OffKeyboard() {
   };
 }
 
+// Poll a local server (10.0.0.x) via VPS → router → server
+function checkLocalServer(ip) {
+  return new Promise((resolve, reject) => {
+    const conn = new SSHClient();
+    const sshKeyPath = (process.env.SSH_KEY_PATH || `${os.homedir()}/.ssh/id_rsa`).replace(/^~/, os.homedir());
+    const sshPassword = process.env.SSH_PASSWORD;
+
+    const connConfig = {
+      host: SERVER_IP,
+      port: 22,
+      username: process.env.SSH_USERNAME || 'root'
+    };
+
+    if (sshPassword) connConfig.password = sshPassword;
+    if (fs.existsSync(sshKeyPath)) {
+      try { connConfig.privateKey = fs.readFileSync(sshKeyPath); } catch (e) {}
+    }
+
+    conn.on('ready', () => {
+      // VPS → router (port 2222) → local server
+      conn.exec(`ssh -o StrictHostKeyChecking=no -i /root/.ssh/vps_to_local -p 2222 root@127.0.0.1 'dbclient -y -i /root/.ssh/router_to_vps vidri@${ip} hostname'`, (err, stream) => {
+        if (err) { conn.end(); return reject(err); }
+        let output = '';
+        stream.on('close', (code) => {
+          conn.end();
+          if (code !== 0) reject(new Error(`exit ${code}`));
+          else resolve(output);
+        }).on('data', (data) => { output += data.toString(); })
+          .stderr.on('data', () => {});
+      });
+    }).on('error', reject).connect(connConfig);
+  });
+}
+
 // Poll server until it responds to ping, then notify
 function pollServerOnline(chatId, ip, name, attempts = 0) {
   const maxAttempts = 30; // 30 * 10s = 5 min max
@@ -553,7 +622,7 @@ function pollServerOnline(chatId, ip, name, attempts = 0) {
   }
   setTimeout(async () => {
     try {
-      await execAsync(`ssh -o StrictHostKeyChecking=no -i /root/.ssh/vps_to_local -p 2222 root@127.0.0.1 'dbclient -y -i /root/.ssh/router_to_vps vidri@${ip} hostname'`);
+      await checkLocalServer(ip);
       console.log(`[Poll] ${name} (${ip}) is online after ${attempts * 10}s`);
       bot.sendMessage(chatId, `🟢 ${name} (${ip}) включился!`);
     } catch (err) {
@@ -670,7 +739,8 @@ bot.on('callback_query', async (query) => {
     case 'b650_wake':
       try {
         console.log(`[WoL] Sending broadcast for dmd-b650 ${SERVERS.b650.mac}`);
-        await execAsync(`ssh -o StrictHostKeyChecking=no -i /root/.ssh/vps_to_local -p 2222 root@127.0.0.1 "wakeonlan -i 10.0.0.255 ${SERVERS.b650.mac}"`);
+        // wakeonlan runs on the router — connect VPS → router via SSH tunnel
+        await executeOnRouter(`wakeonlan -i 10.0.0.255 ${SERVERS.b650.mac}`);
         bot.sendMessage(chatId, '✅ Сигнал WoL отправлен на dmd-b650');
         pollServerOnline(chatId, SERVERS.b650.ip, 'dmd-b650');
       } catch (err) {
@@ -786,9 +856,30 @@ bot.on('callback_query', async (query) => {
 
     case 'b650_net_report':
       try {
-        // Copy report from Windows to VPS, then send
-        await execAsync('ssh -o StrictHostKeyChecking=no -i /root/.ssh/vps_to_local -p 2222 root@127.0.0.1 "dbclient -y -i /root/.ssh/router_to_vps vidri@10.0.0.2 cat C:/NetworkLogs/network_report.html" > /tmp/b650_report.html');
-        bot.sendDocument(chatId, '/tmp/b650_report.html', {
+        // Copy report from Windows via VPS → router → Windows, save on VPS
+        const report = await executeSSHOnWindows('Get-Content C:/NetworkLogs/network_report.html -Raw');
+        // Write to temp file locally and send
+        const tmpPath = '/tmp/b650_report.html';
+        const conn = new SSHClient();
+        const sshKeyPath = (process.env.SSH_KEY_PATH || `${os.homedir()}/.ssh/id_rsa`).replace(/^~/, os.homedir());
+        const connConfig = {
+          host: SERVER_IP, port: 22,
+          username: process.env.SSH_USERNAME || 'root'
+        };
+        if (process.env.SSH_PASSWORD) connConfig.password = process.env.SSH_PASSWORD;
+        if (fs.existsSync(sshKeyPath)) {
+          try { connConfig.privateKey = fs.readFileSync(sshKeyPath); } catch (e) {}
+        }
+        await new Promise((resolve, reject) => {
+          conn.on('ready', () => {
+            conn.exec(`cat > ${tmpPath}`, (err, stream) => {
+              if (err) { conn.end(); return reject(err); }
+              stream.end(report);
+              stream.on('close', () => { conn.end(); resolve(); });
+            });
+          }).on('error', reject).connect(connConfig);
+        });
+        bot.sendDocument(chatId, tmpPath, {
           caption: '📋 Network Log — dmd-b650'
         });
       } catch (err) {
@@ -892,9 +983,8 @@ bot.on('callback_query', async (query) => {
     case 'intel_wake':
       try {
         console.log(`[WoL] Sending broadcast for Intel ${SERVERS.intel.mac}`);
-        await execAsync(`ssh -o StrictHostKeyChecking=no -i /root/.ssh/vps_to_local -p 2222 root@127.0.0.1 "wakeonlan -i 10.0.0.255 ${SERVERS.intel.mac}"`);
+        await executeOnRouter(`wakeonlan -i 10.0.0.255 ${SERVERS.intel.mac}`);
         bot.sendMessage(chatId, '✅ Сигнал WoL отправлен на Server Intel');
-        // Poll until server responds
         pollServerOnline(chatId, SERVERS.intel.ip, 'Server Intel');
       } catch (err) {
         console.error(`[WoL] Error:`, err);
@@ -904,7 +994,7 @@ bot.on('callback_query', async (query) => {
     case 'r3_wake':
       try {
         console.log(`[WoL] Sending broadcast for R3 ${SERVERS.r3.mac}`);
-        await execAsync(`ssh -o StrictHostKeyChecking=no -i /root/.ssh/vps_to_local -p 2222 root@127.0.0.1 "wakeonlan -i 10.0.0.255 ${SERVERS.r3.mac}"`);
+        await executeOnRouter(`wakeonlan -i 10.0.0.255 ${SERVERS.r3.mac}`);
         bot.sendMessage(chatId, '✅ Сигнал WoL отправлен на Server R3');
         pollServerOnline(chatId, SERVERS.r3.ip, 'Server R3');
       } catch (err) {
@@ -915,7 +1005,7 @@ bot.on('callback_query', async (query) => {
     case 'all_wake':
       try {
         console.log(`[WoL] Sending broadcast to both servers via router`);
-        await execAsync(`ssh -o StrictHostKeyChecking=no -i /root/.ssh/vps_to_local -p 2222 root@127.0.0.1 "wakeonlan -i 10.0.0.255 ${SERVERS.intel.mac} && wakeonlan -i 10.0.0.255 ${SERVERS.r3.mac}"`);
+        await executeOnRouter(`wakeonlan -i 10.0.0.255 ${SERVERS.intel.mac} && wakeonlan -i 10.0.0.255 ${SERVERS.r3.mac}`);
         bot.sendMessage(chatId, '✅ Сигнал WoL отправлен на оба сервера');
         pollServerOnline(chatId, SERVERS.intel.ip, 'Server Intel');
         pollServerOnline(chatId, SERVERS.r3.ip, 'Server R3');
