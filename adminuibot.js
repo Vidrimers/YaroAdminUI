@@ -816,7 +816,23 @@ bot.on('callback_query', async (query) => {
       const state = await getB650AutoRestart();
       const newState = !state.enabled;
       await setB650AutoRestart(newState);
-      bot.answerCallbackQuery(query.id, { text: newState ? 'Авто-перезапуск ВКЛ' : 'Авто-перезапуск ВЫКЛ' });
+
+      // Start/stop NetworkLog.ps1 on Windows
+      try {
+        if (newState) {
+          // Start NetworkLog.ps1 in background
+          await executeSSHOnWindows('Start-Process powershell -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File C:\\NetworkLogs\\NetworkLog.ps1" -WindowStyle Hidden');
+          bot.answerCallbackQuery(query.id, { text: 'Авто-перезапуск ВКЛ + мониторинг запущен' });
+        } else {
+          // Kill only NetworkLog.ps1 process
+          await executeSSHOnWindows('Get-CimInstance Win32_Process -Filter "CommandLine LIKE \'%NetworkLog.ps1%\'" | Invoke-CimMethod -MethodName Terminate -ErrorAction SilentlyContinue');
+          bot.answerCallbackQuery(query.id, { text: 'Авто-перезапуск ВЫКЛ + мониторинг остановлен' });
+        }
+      } catch (err) {
+        console.log('[NetToggle] Could not start/stop NetworkLog.ps1:', err.message);
+        bot.answerCallbackQuery(query.id, { text: newState ? 'Авто-перезапуск ВКЛ' : 'Авто-перезапуск ВЫКЛ' });
+      }
+
       const label = newState ? '🟢 ВКЛ' : '🔴 ВЫКЛ';
       bot.editMessageText(`🌐 <b>Сеть dmd-b650</b>\n\n🔄 Авто-перезапуск: ${label}`, {
         chat_id: chatId,
