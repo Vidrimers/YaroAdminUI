@@ -826,7 +826,22 @@ bot.on('callback_query', async (query) => {
     // ============ B650 NETWORK ============
     case 'b650_net_menu': {
       const state = await getB650AutoRestart();
-      bot.editMessageText('🌐 <b>Сеть dmd-b650</b>', {
+      let extraMsg = '';
+      // If auto-restart is ON, check if NetworkLog.ps1 is running
+      if (state.enabled) {
+        try {
+          const procCheck = await executeSSHOnWindows('(Get-CimInstance Win32_Process -Filter "CommandLine LIKE \'%NetworkLog.ps1%\'" | Measure-Object).Count');
+          const count = parseInt(procCheck.trim()) || 0;
+          if (count === 0) {
+            // Script died — restart it
+            await executeSSHOnWindows('Start-Process powershell -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File C:\\NetworkLogs\\NetworkLog.ps1" -WindowStyle Hidden');
+            extraMsg = '\n\n⚠️ Мониторинг был перезапущен (скрипт упал)';
+          }
+        } catch (e) {
+          extraMsg = '\n\n⚠️ Не удалось проверить мониторинг';
+        }
+      }
+      bot.editMessageText(`🌐 <b>Сеть dmd-b650</b>${extraMsg}`, {
         chat_id: chatId,
         message_id: query.message.message_id,
         parse_mode: 'HTML',
