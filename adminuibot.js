@@ -323,7 +323,7 @@ function executeOnRouter(command) {
 
     conn.on('ready', () => {
       // Connect from VPS to router via SSH tunnel on port 2222
-      conn.exec(`ssh -o StrictHostKeyChecking=no -i /root/.ssh/vps_to_local -p 2222 root@127.0.0.1 "${command}"`, (err, stream) => {
+      conn.exec(`ssh -o StrictHostKeyChecking=no -o ServerAliveInterval=15 -o ServerAliveCountMax=3 -i /root/.ssh/vps_to_local -p 2222 root@127.0.0.1 "${command}"`, (err, stream) => {
         if (err) { conn.end(); return reject(err); }
         let output = '';
         let errorOutput = '';
@@ -340,33 +340,45 @@ function executeOnRouter(command) {
 
 // SSH to Windows PC (10.0.0.2) via VPS → router tunnel
 // Uses powershell -EncodedCommand with base64 to bypass shell escaping
-async function executeSSHOnWindows(command) {
+async function executeSSHOnWindows(command, retries = 2) {
   // command should be a raw PowerShell cmdlet, NOT "powershell -Command ..."
   const b64 = Buffer.from(command, 'utf16le').toString('base64');
-  const fullCmd = `ssh -o StrictHostKeyChecking=no -i /root/.ssh/vps_to_local -p 2222 root@127.0.0.1 'dbclient -y -i /root/.ssh/router_to_vps vidri@10.0.0.2 powershell -EncodedCommand ${b64}'`;
-  const { stdout } = await execAsync(fullCmd);
-  let output = stdout;
-  if (output.includes('CLIXML') || output.includes('<Obj')) {
-    const clean = [];
-    for (const line of output.split('\n')) {
-      const t = line.trim();
-      if (!t) continue;
-      if (t.startsWith('#<') || t.startsWith('<Obj') || t.startsWith('</Obj') ||
-          t.startsWith('<TN') || t.startsWith('<MS') || t.startsWith('<PR') ||
-          t.startsWith('<AV') || t.startsWith('<AI') || t.startsWith('<PI') ||
-          t.startsWith('<PC') || t.startsWith('<T>') || t.startsWith('<SR') ||
-          t.startsWith('<SD') || t.startsWith('<I64') || t.startsWith('<Nil') ||
-          t.startsWith('<TNRef')) continue;
-      if (t.startsWith('<S ')) {
-        const m = t.match(/>([^<]+)</);
-        if (m) clean.push(m[1].trim());
-        continue;
+  const fullCmd = `ssh -o StrictHostKeyChecking=no -o ServerAliveInterval=15 -o ServerAliveCountMax=3 -i /root/.ssh/vps_to_local -p 2222 root@127.0.0.1 'dbclient -y -i /root/.ssh/router_to_vps vidri@10.0.0.2 powershell -EncodedCommand ${b64}'`;
+  let lastErr;
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      const { stdout } = await execAsync(fullCmd);
+      let output = stdout;
+      if (output.includes('CLIXML') || output.includes('<Obj')) {
+        const clean = [];
+        for (const line of output.split('\n')) {
+          const t = line.trim();
+          if (!t) continue;
+          if (t.startsWith('#<') || t.startsWith('<Obj') || t.startsWith('</Obj') ||
+              t.startsWith('<TN') || t.startsWith('<MS') || t.startsWith('<PR') ||
+              t.startsWith('<AV') || t.startsWith('<AI') || t.startsWith('<PI') ||
+              t.startsWith('<PC') || t.startsWith('<T>') || t.startsWith('<SR') ||
+              t.startsWith('<SD') || t.startsWith('<I64') || t.startsWith('<Nil') ||
+              t.startsWith('<TNRef')) continue;
+          if (t.startsWith('<S ')) {
+            const m = t.match(/>([^<]+)</);
+            if (m) clean.push(m[1].trim());
+            continue;
+          }
+          if (!t.startsWith('<')) clean.push(t);
+        }
+        output = clean.join('\n').trim();
       }
-      if (!t.startsWith('<')) clean.push(t);
+      return output;
+    } catch (err) {
+      lastErr = err;
+      if (attempt < retries) {
+        console.log(`[SSH-Windows] Attempt ${attempt + 1} failed, retrying...`);
+        await new Promise(r => setTimeout(r, 2000));
+      }
     }
-    output = clean.join('\n').trim();
   }
-  return output;
+  throw lastErr;
 }
 
 // Функция проверки прав администратора
@@ -599,7 +611,7 @@ function checkLocalServer(ip) {
 
     conn.on('ready', () => {
       // VPS → router (port 2222) → local server
-      conn.exec(`ssh -o StrictHostKeyChecking=no -i /root/.ssh/vps_to_local -p 2222 root@127.0.0.1 'dbclient -y -i /root/.ssh/router_to_vps vidri@${ip} hostname'`, (err, stream) => {
+      conn.exec(`ssh -o StrictHostKeyChecking=no -o ServerAliveInterval=15 -o ServerAliveCountMax=3 -i /root/.ssh/vps_to_local -p 2222 root@127.0.0.1 'dbclient -y -i /root/.ssh/router_to_vps vidri@${ip} hostname'`, (err, stream) => {
         if (err) { conn.end(); return reject(err); }
         let output = '';
         stream.on('close', (code) => {
