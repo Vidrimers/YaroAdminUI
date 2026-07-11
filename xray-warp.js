@@ -309,7 +309,6 @@ const xrayCard = {
     localStorage.setItem("xraySort", sortBy);
     this._renderClients(sortBy);
   },
-  },
 
   async showClientInfo(uuid) {
     const modal = document.getElementById("xrayClientModal");
