@@ -6,6 +6,7 @@ import sqlite3 from "sqlite3";
 import crypto from "crypto";
 import fs from "fs";
 import path from "path";
+import { execSync } from "child_process";
 import jwt from "jsonwebtoken";
 import { Client as SSHClient } from "ssh2";
 import os from "os";
@@ -2161,11 +2162,10 @@ app.get("/api/xray/subscription/:uuid", verifyToken, async (req, res) => {
 // Xray service management (systemctl via SSH)
 app.get("/api/xray/status", verifyToken, async (req, res) => {
   try {
-    const ssh = new SSHHelper(SERVER_IP);
-    const output = await ssh.executeCommand("systemctl is-active xray");
-    res.json({ success: true, active: output.trim() === "active", status: output.trim() });
+    const output = execSync("systemctl is-active xray", { timeout: 5000 }).toString().trim();
+    res.json({ success: true, active: output === "active", status: output });
   } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
+    res.json({ success: true, active: false, status: "inactive" });
   }
 });
 
@@ -2175,9 +2175,11 @@ app.post("/api/xray/service/:action", verifyToken, async (req, res) => {
     if (!["start", "stop", "restart"].includes(action)) {
       return res.status(400).json({ success: false, message: "Invalid action" });
     }
-    const ssh = new SSHHelper(SERVER_IP);
-    const output = await ssh.executeCommand(`systemctl ${action} xray && sleep 1 && systemctl is-active xray`);
-    res.json({ success: true, status: output.trim() });
+    execSync(`systemctl ${action} xray`, { timeout: 10000 });
+    // Wait for status to settle
+    execSync("sleep 1", { timeout: 3000 });
+    const status = execSync("systemctl is-active xray", { timeout: 5000 }).toString().trim();
+    res.json({ success: true, status });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
@@ -2185,31 +2187,29 @@ app.post("/api/xray/service/:action", verifyToken, async (req, res) => {
 
 app.get("/api/xray/logs", verifyToken, async (req, res) => {
   try {
-    const ssh = new SSHHelper(SERVER_IP);
-    const output = await ssh.executeCommand("journalctl -u xray --no-pager -n 50 --output=short-iso");
+    const output = execSync("journalctl -u xray --no-pager -n 50 --output=short-iso", { timeout: 5000 }).toString();
     res.json({ success: true, logs: output });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
 });
 
-// WARP domain management
+// WARP domain management (local file operations — server runs on VPS)
+const XRAY_CONFIG = "/usr/local/etc/xray/config.json";
+
 app.get("/api/xray/warp-status", verifyToken, async (req, res) => {
   try {
-    const ssh = new SSHHelper(SERVER_IP);
-    const output = await ssh.executeCommand("warp-cli status 2>/dev/null || echo 'not available'");
+    const output = execSync("warp-cli status 2>/dev/null || echo 'not available'", { timeout: 5000 }).toString();
     const connected = output.includes("Connected");
     res.json({ success: true, connected, status: output.trim() });
   } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
+    res.json({ success: true, connected: false, status: "not available" });
   }
 });
 
 app.get("/api/xray/warp-domains", verifyToken, async (req, res) => {
   try {
-    const ssh = new SSHHelper(SERVER_IP);
-    const output = await ssh.executeCommand("cat /usr/local/etc/xray/config.json");
-    const config = JSON.parse(output);
+    const config = JSON.parse(fs.readFileSync(XRAY_CONFIG, "utf8"));
     const warpRule = config.routing?.rules?.find(r => r.outboundTag === "warp");
     const domains = warpRule?.domain || [];
     res.json({ success: true, domains });
@@ -2220,29 +2220,34 @@ app.get("/api/xray/warp-domains", verifyToken, async (req, res) => {
 
 app.post("/api/xray/warp-domains", verifyToken, async (req, res) => {
   try {
-    const { domain, action } = req.body; // action: "add" or "remove"
-    const ssh = new SSHHelper(SERVER_IP);
-    const output = await ssh.executeCommand("cat /usr/local/etc/xray/config.json");
-    const config = JSON.parse(output);
+    const { domain, action } = req.body;
+    const config = JSON.parse(fs.readFileSync(XRAY_CONFIG, "utf8"));
     const warpRule = config.routing?.rules?.find(r => r.outboundTag === "warp");
     if (!warpRule) return res.status(400).json({ success: false, message: "WARP routing rule not found" });
 
     if (action === "add") {
-      if (!warpRule.domain.includes(domain)) warpRule.domain.push(`domain:${domain}`);
+      const entry = `domain:${domain}`;
+      if (!warpRule.domain.includes(entry)) warpRule.domain.push(entry);
     } else if (action === "remove") {
       warpRule.domain = warpRule.domain.filter(d => d !== `domain:${domain}` && d !== domain);
     } else {
       return res.status(400).json({ success: false, message: "Invalid action" });
     }
 
-    // Backup, write, validate, restart
-    const configStr = JSON.stringify(config, null, 2);
-    await ssh.executeCommand(`cp /usr/local/etc/xray/config.json /usr/local/etc/xray/config.json.bak`);
-    // Write via base64 to avoid escaping issues
-    const b64 = Buffer.from(configStr).toString("base64");
-    await ssh.executeCommand(`echo '${b64}' | base64 -d > /usr/local/etc/xray/config.json`);
-    await ssh.executeCommand("xray run -test -c /usr/local/etc/xray/config.json 2>&1 || (cp /usr/local/etc/xray/config.json.bak /usr/local/etc/xray/config.json && echo 'RESTORED')");
-    await ssh.executeCommand("systemctl restart xray");
+    // Backup
+    fs.copyFileSync(XRAY_CONFIG, XRAY_CONFIG + ".bak");
+    // Write
+    fs.writeFileSync(XRAY_CONFIG, JSON.stringify(config, null, 2));
+    // Validate
+    try {
+      execSync("xray run -test -c " + XRAY_CONFIG, { timeout: 5000 });
+    } catch (e) {
+      // Restore from backup
+      fs.copyFileSync(XRAY_CONFIG + ".bak", XRAY_CONFIG);
+      return res.status(400).json({ success: false, message: "Config validation failed, restored from backup" });
+    }
+    // Restart
+    execSync("systemctl restart xray", { timeout: 10000 });
 
     res.json({ success: true, domains: warpRule.domain });
   } catch (err) {
