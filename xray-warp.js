@@ -199,21 +199,14 @@ const xrayCard = {
 
   async api(method, path, body) {
     const token = localStorage.getItem("admin_token");
-    const ctrl = new AbortController();
-    const timeout = setTimeout(() => ctrl.abort(), 15000);
-    try {
-      const opts = {
-        method,
-        headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
-        signal: ctrl.signal,
-      };
-      if (body) opts.body = JSON.stringify(body);
-      const resp = await fetch(`/api/xray${path}`, opts);
-      if (resp.status === 401) { localStorage.clear(); location.reload(); return null; }
-      return await resp.json();
-    } finally {
-      clearTimeout(timeout);
-    }
+    const opts = {
+      method,
+      headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
+    };
+    if (body) opts.body = JSON.stringify(body);
+    const resp = await fetch(`/api/xray${path}`, opts);
+    if (resp.status === 401) { localStorage.clear(); location.reload(); return null; }
+    return await resp.json();
   },
 
   async checkStatus() {
@@ -722,21 +715,14 @@ const warpCard = {
 
   async api(method, path, body) {
     const token = localStorage.getItem("admin_token");
-    const ctrl = new AbortController();
-    const timeout = setTimeout(() => ctrl.abort(), 15000);
-    try {
-      const opts = {
-        method,
-        headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
-        signal: ctrl.signal,
-      };
-      if (body) opts.body = JSON.stringify(body);
-      const resp = await fetch(`/api/xray${path}`, opts);
-      if (resp.status === 401) { localStorage.clear(); location.reload(); return null; }
-      return await resp.json();
-    } finally {
-      clearTimeout(timeout);
-    }
+    const opts = {
+      method,
+      headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
+    };
+    if (body) opts.body = JSON.stringify(body);
+    const resp = await fetch(`/api/xray${path}`, opts);
+    if (resp.status === 401) { localStorage.clear(); location.reload(); return null; }
+    return await resp.json();
   },
 
   async checkStatus() {
