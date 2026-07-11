@@ -313,7 +313,6 @@ const xrayCard = {
           <div style="height: 6px; background: rgba(255,255,255,0.1); border-radius: 3px; overflow: hidden">
             <div style="height: 100%; width: ${Math.min(parseFloat(monthPct), 100)}%; background: ${monthPct > 90 ? '#f44336' : monthPct > 70 ? '#ff9800' : '#4caf50'}; border-radius: 3px"></div>
           </div>
-          <div class="info-row"><span class="info-label">Всего:</span><span>${usedGB} GB</span></div>
           <div class="info-row"><span class="info-label">Сброс трафика:</span><span>${resetDate ? new Date(resetDate).toLocaleDateString("ru-RU") : "N/A"}</span></div>
           <div class="info-row"><span class="info-label">Устройства:</span><span>${c.max_devices || 2}</span></div>
           <div class="info-row"><span class="info-label">Предупреждения:</span><span>${c.warnings_count || 0} / 3</span></div>
