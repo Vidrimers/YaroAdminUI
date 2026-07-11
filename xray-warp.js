@@ -246,14 +246,10 @@ const xrayCard = {
       this.clients = data.clients || [];
       if (!this.clients.length) { list.innerHTML = '<p class="text-muted">Нет клиентов</p>'; return; }
 
-      const trafficPromises = this.clients.map(c => this.api("GET", `/clients/${c.uuid}/traffic-total`).catch(() => null));
-      const trafficResults = await Promise.all(trafficPromises);
-
-      list.innerHTML = this.clients.map((c, i) => {
-        const tr = trafficResults[i];
-        const usedGB = tr?.traffic_used_gb || 0;
-        const limitGB = tr?.traffic_limit_gb || 100;
-        const status = tr?.status || c.status || "active";
+      list.innerHTML = this.clients.map((c) => {
+        const usedGB = c.traffic_used_gb || 0;
+        const limitGB = c.traffic_limit_gb || 100;
+        const status = c.status || "active";
         const statusIcon = status === "active" ? "🟢" : status === "blocked" ? "🔴" : "🟡";
         const pct = limitGB > 0 ? Math.min((usedGB / limitGB) * 100, 100).toFixed(1) : 0;
         return `
@@ -278,21 +274,19 @@ const xrayCard = {
     body.innerHTML = '<p class="text-muted">Загрузка...</p>';
 
     try {
-      const [clientData, trafficData, subData] = await Promise.all([
+      const [clientData, subData] = await Promise.all([
         this.api("GET", `/clients/${uuid}`),
-        this.api("GET", `/clients/${uuid}/traffic-total`),
         this.api("GET", `/clients/${uuid}/subscription`),
       ]);
 
       const c = clientData?.client || clientData;
-      const tr = trafficData || {};
       const sub = subData || {};
 
       title.textContent = `ℹ️ ${XrayModal._esc(c.name || c.email)}`;
 
-      const usedGB = (tr.traffic_used_gb || 0).toFixed(2);
-      const limitGB = tr.traffic_limit_gb || 100;
-      const pct = limitGB > 0 ? ((tr.traffic_used_gb || 0) / limitGB * 100).toFixed(1) : 0;
+      const usedGB = (c.traffic_used_gb || 0).toFixed(2);
+      const limitGB = c.traffic_limit_gb || 100;
+      const pct = limitGB > 0 ? ((c.traffic_used_gb || 0) / limitGB * 100).toFixed(1) : 0;
       const status = c.status || "active";
       const statusColor = status === "active" ? "#4caf50" : status === "blocked" ? "#f44336" : "#ff9800";
       const daysLeft = sub.days_remaining ?? "N/A";
