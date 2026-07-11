@@ -2197,8 +2197,17 @@ app.post("/api/xray/extension-requests/:id/deny", verifyToken, async (req, res) 
 
 app.get("/api/xray/subscription/:uuid", verifyToken, async (req, res) => {
   try {
-    const data = await xrayAPI("GET", `/subscription/${req.params.uuid}`);
-    res.json(data);
+    const resp = await fetch(`${XRAY_API}/subscription/${req.params.uuid}`, {
+      headers: { "Authorization": `Bearer ${XRAY_API_KEY}` },
+    });
+    const text = await resp.text();
+    // Decode base64 to get vless:// links
+    try {
+      const decoded = Buffer.from(text.trim(), "base64").toString("utf8");
+      res.json({ success: true, links: decoded });
+    } catch {
+      res.json({ success: true, links: text });
+    }
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }

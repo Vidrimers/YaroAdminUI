@@ -280,7 +280,7 @@ const xrayCard = {
       ]);
 
       const c = clientData?.client || clientData;
-      const sub = subData || {};
+      const sub = subData?.subscription || subData || {};
 
       title.textContent = `ℹ️ ${XrayModal._esc(c.name || c.email)}`;
 
@@ -289,7 +289,9 @@ const xrayCard = {
       const pct = limitGB > 0 ? ((c.traffic_used_gb || 0) / limitGB * 100).toFixed(1) : 0;
       const status = c.status || "active";
       const statusColor = status === "active" ? "#4caf50" : status === "blocked" ? "#f44336" : "#ff9800";
-      const daysLeft = sub.days_remaining ?? "N/A";
+      const daysLeft = sub.subscription_days_remaining ?? sub.days_remaining ?? "N/A";
+      const subStart = sub.subscription_start || c.subscription_start;
+      const subEnd = sub.subscription_end || c.subscription_end;
 
       body.innerHTML = `
         <div style="display: flex; flex-direction: column; gap: 12px">
@@ -297,7 +299,7 @@ const xrayCard = {
           <div class="info-row"><span class="info-label">Email:</span><span>${XrayModal._esc(c.email || "N/A")}</span></div>
           <div class="info-row"><span class="info-label">Telegram ID:</span><span>${c.telegram_id || "N/A"}</span></div>
           <div class="info-row"><span class="info-label">Статус:</span><span style="color: ${statusColor}; font-weight: 600">${status}</span></div>
-          <div class="info-row"><span class="info-label">Подписка:</span><span>${sub.subscription_start ? new Date(sub.subscription_start).toLocaleDateString("ru-RU") : "N/A"} → ${sub.subscription_end ? new Date(sub.subscription_end).toLocaleDateString("ru-RU") : "N/A"} <span style="color: ${daysLeft < 7 ? '#ff9800' : '#888'}">(${daysLeft} дн.)</span></span></div>
+          <div class="info-row"><span class="info-label">Подписка:</span><span>${subStart ? new Date(subStart).toLocaleDateString("ru-RU") : "N/A"} → ${subEnd ? new Date(subEnd).toLocaleDateString("ru-RU") : "N/A"} <span style="color: ${daysLeft < 7 ? '#ff9800' : '#888'}">(${daysLeft} дн.)</span></span></div>
           <div class="info-row"><span class="info-label">Трафик:</span><span>${usedGB} / ${limitGB} GB (${pct}%)</span></div>
           <div style="height: 6px; background: rgba(255,255,255,0.1); border-radius: 3px; overflow: hidden">
             <div style="height: 100%; width: ${Math.min(pct, 100)}%; background: ${pct > 90 ? '#f44336' : pct > 70 ? '#ff9800' : '#4caf50'}; border-radius: 3px"></div>
