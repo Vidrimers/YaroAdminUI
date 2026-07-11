@@ -1416,7 +1416,6 @@ class UIController {
       this.setupCardCollapse();
       this.setupTerminal();
       this.setupScreenProcesses();
-      this.setupVPNConfiguration();
       this.setupServerStatusUI();
       this.setupThemes();
       this.setupNotificationsUI();
@@ -2327,119 +2326,6 @@ class UIController {
     } catch (error) {
       console.error("Error loading settings from database:", error);
     }
-  }
-
-  setupVPNConfiguration() {
-    const vpnTypeSelect = document.getElementById("vpnType");
-    const wgConnectBtn = document.getElementById("wgConnectBtn");
-    const ovpnConnectBtn = document.getElementById("ovpnConnectBtn");
-    const xrayConnectBtn = document.getElementById("xrayConnectBtn");
-    const vpnStatusEl = document.getElementById("vpnStatus");
-
-    // Handle VPN type change
-    vpnTypeSelect.addEventListener("change", (e) => {
-      const type = e.target.value;
-      document.getElementById("wireguardConfig").style.display =
-        type === "wireguard" ? "block" : "none";
-      document.getElementById("openvpnConfig").style.display =
-        type === "openvpn" ? "block" : "none";
-      document.getElementById("xrayConfig").style.display =
-        type === "xray" ? "block" : "none";
-    });
-
-    // WireGuard Connect
-    if (wgConnectBtn) {
-      wgConnectBtn.addEventListener("click", () => {
-        const privateKey = document.getElementById("wgPrivateKey").value;
-        const address = document.getElementById("wgAddress").value;
-        const dns = document.getElementById("wgDNS").value;
-
-        if (!privateKey || !address) {
-          this.toast.error("Заполните обязательные поля");
-          return;
-        }
-
-        this.updateVPNStatus("connecting");
-        // Simulate connection
-        setTimeout(() => {
-          this.updateVPNStatus("active", "WireGuard");
-          this.toast.success("Подключение к WireGuard установлено");
-          this.saveVPNConfig("wireguard", {
-            privateKey,
-            address,
-            dns,
-          });
-        }, 2000);
-      });
-    }
-
-    // OpenVPN Connect
-    if (ovpnConnectBtn) {
-      ovpnConnectBtn.addEventListener("click", () => {
-        const config = document.getElementById("ovpnConfig").value;
-
-        if (!config) {
-          this.toast.error("Заполните конфиг");
-          return;
-        }
-
-        this.updateVPNStatus("connecting");
-        setTimeout(() => {
-          this.updateVPNStatus("active", "OpenVPN");
-          this.toast.success("Подключение к OpenVPN установлено");
-          this.saveVPNConfig("openvpn", { config });
-        }, 2000);
-      });
-    }
-
-    // Xray Connect
-    if (xrayConnectBtn) {
-      xrayConnectBtn.addEventListener("click", () => {
-        const uuid = document.getElementById("xrayUUID").value;
-        const server = document.getElementById("xrayServer").value;
-        const port = document.getElementById("xrayPort").value;
-        const encryption = document.getElementById("xrayEncryption").value;
-
-        if (!uuid || !server || !port) {
-          this.toast.error("Заполните обязательные поля");
-          return;
-        }
-
-        this.updateVPNStatus("connecting");
-        setTimeout(() => {
-          this.updateVPNStatus("active", "Xray");
-          this.toast.success("Подключение к Xray установлено");
-          this.saveVPNConfig("xray", {
-            uuid,
-            server,
-            port,
-            encryption,
-          });
-        }, 2000);
-      });
-    }
-  }
-
-  updateVPNStatus(status, type = null) {
-    const statusEl = document.getElementById("vpnStatus");
-    statusEl.className = "vpn-status " + status;
-
-    if (status === "active") {
-      statusEl.textContent = `✅ Подключено (${type})`;
-    } else if (status === "connecting") {
-      statusEl.textContent = "⏳ Подключение...";
-    } else {
-      statusEl.textContent = "❌ Отключено";
-    }
-  }
-
-  saveVPNConfig(type, config) {
-    const vpnConfigs = JSON.parse(localStorage.getItem("vpnConfigs") || "{}");
-    vpnConfigs[type] = {
-      ...config,
-      timestamp: new Date().toISOString(),
-    };
-    localStorage.setItem("vpnConfigs", JSON.stringify(vpnConfigs));
   }
 
   setupServerStatusUI() {

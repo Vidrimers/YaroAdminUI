@@ -556,132 +556,40 @@
           </div>
         </div>
 
-        <!-- VPN CONFIGURATION CARD -->
+        <!-- XRAY MANAGEMENT CARD -->
         <div class="card">
           <div class="card-header">
-            <h2>🔐 VPN Конфигурация</h2>
+            <h2>⚡ Xray</h2>
+            <span id="xrayStatusBadge" class="text-muted" style="margin-left: auto; font-size: 0.85em">⏳ загрузка...</span>
           </div>
           <div class="card-body">
-            <div style="display: flex; flex-direction: column; gap: 15px">
-              <!-- VPN Type Selection -->
-              <div class="vpn-config-section">
-                <h3>📋 Тип VPN</h3>
-                <div class="vpn-config-form">
-                  <select id="vpnType" style="width: 100%">
-                    <option value="wireguard">WireGuard</option>
-                    <option value="openvpn">OpenVPN</option>
-                    <option value="xray">Xray</option>
-                  </select>
-                </div>
-              </div>
+            <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 15px">
+              <button class="btn btn-sm btn-info" onclick="xrayCard.checkStatus()">🔄 Статус</button>
+              <button class="btn btn-sm btn-success" onclick="xrayCard.serviceAction('start')">▶ Запустить</button>
+              <button class="btn btn-sm btn-warning" onclick="xrayCard.serviceAction('restart')">🔄 Перезапустить</button>
+              <button class="btn btn-sm btn-danger" onclick="xrayCard.serviceAction('stop')">⏹ Остановить</button>
+              <button class="btn btn-sm btn-secondary" onclick="xrayCard.showLogs()">📜 Логи</button>
+              <button class="btn btn-sm btn-primary" onclick="xrayCard.showAdminModal()" style="margin-left: auto">🔧 Управление</button>
+            </div>
+            <div id="xrayClientsList" style="display: flex; flex-direction: column; gap: 8px">
+              <p class="text-muted">Загрузка...</p>
+            </div>
+          </div>
+        </div>
 
-              <!-- WireGuard Config -->
-              <div class="vpn-config-section" id="wireguardConfig">
-                <h3>🛡️ WireGuard</h3>
-                <div class="vpn-config-form">
-                  <label>Приватный ключ:</label>
-                  <textarea
-                    id="wgPrivateKey"
-                    placeholder="Скопируйте приватный ключ..."
-                    rows="3"
-                    style="
-                      font-family: 'Courier New', monospace;
-                      font-size: 0.85em;
-                    "
-                  ></textarea>
-                  <label>IP адрес:</label>
-                  <input type="text" id="wgAddress" placeholder="10.0.0.2/32" />
-                  <label>DNS серверы:</label>
-                  <input
-                    type="text"
-                    id="wgDNS"
-                    placeholder="8.8.8.8, 8.8.4.4"
-                  />
-                  <button class="btn btn-primary" id="wgConnectBtn">
-                    Подключиться
-                  </button>
-                </div>
-              </div>
-
-              <!-- OpenVPN Config -->
-              <div
-                class="vpn-config-section"
-                id="openvpnConfig"
-                style="display: none"
-              >
-                <h3>🔓 OpenVPN</h3>
-                <div class="vpn-config-form">
-                  <label>Конфиг файл (.ovpn):</label>
-                  <textarea
-                    id="ovpnConfig"
-                    placeholder="Скопируйте содержимое .ovpn файла..."
-                    rows="5"
-                    style="
-                      font-family: 'Courier New', monospace;
-                      font-size: 0.85em;
-                    "
-                  ></textarea>
-                  <button class="btn btn-primary" id="ovpnConnectBtn">
-                    Подключиться
-                  </button>
-                </div>
-              </div>
-
-              <!-- Xray Config -->
-              <div
-                class="vpn-config-section"
-                id="xrayConfig"
-                style="display: none"
-              >
-                <h3>⚡ Xray</h3>
-                <div class="vpn-config-form">
-                  <label>UUID:</label>
-                  <input
-                    type="text"
-                    id="xrayUUID"
-                    placeholder="00000000-0000-0000-0000-000000000000"
-                  />
-                  <label>Сервер адрес:</label>
-                  <input
-                    type="text"
-                    id="xrayServer"
-                    placeholder="example.com"
-                  />
-                  <label>Порт:</label>
-                  <input type="number" id="xrayPort" placeholder="443" />
-                  <label>Шифрование:</label>
-                  <select id="xrayEncryption">
-                    <option value="auto">auto</option>
-                    <option value="aes-128-gcm">aes-128-gcm</option>
-                    <option value="chacha20-poly1305">chacha20-poly1305</option>
-                  </select>
-                  <button class="btn btn-primary" id="xrayConnectBtn">
-                    Подключиться
-                  </button>
-                </div>
-              </div>
-
-              <!-- VPN Status -->
-              <div
-                style="
-                  padding: 12px;
-                  background: rgba(0, 0, 0, 0.2);
-                  border-radius: 6px;
-                "
-              >
-                <div
-                  style="
-                    display: flex;
-                    justify-content: space-between;
-                    align-items: center;
-                  "
-                >
-                  <span style="color: #b0b0b0">Статус подключения:</span>
-                  <span class="vpn-status inactive" id="vpnStatus"
-                    >❌ Отключено</span
-                  >
-                </div>
-              </div>
+        <!-- WARP MANAGEMENT CARD -->
+        <div class="card">
+          <div class="card-header">
+            <h2>🌐 Cloudflare WARP</h2>
+            <span id="warpStatusBadge" class="text-muted" style="margin-left: auto; font-size: 0.85em">⏳ загрузка...</span>
+          </div>
+          <div class="card-body">
+            <div id="warpDomainsList" style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 15px">
+              <p class="text-muted">Загрузка...</p>
+            </div>
+            <div style="display: flex; gap: 8px">
+              <input type="text" id="warpDomainInput" placeholder="domain.com" style="flex: 1; padding: 8px 12px; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.15); border-radius: 6px; color: #e0e0e0">
+              <button class="btn btn-sm btn-success" onclick="warpCard.addDomain()">➕ Добавить</button>
             </div>
           </div>
         </div>
@@ -774,7 +682,82 @@
       </div>
     </div>
 
+    <!-- XRAY CLIENT INFO MODAL -->
+    <div id="xrayClientModal" class="modal" style="display: none">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2 id="xrayClientModalTitle">ℹ️ Информация о клиенте</h2>
+          <button class="modal-close" onclick="document.getElementById('xrayClientModal').style.display='none'">&times;</button>
+        </div>
+        <div class="modal-body" id="xrayClientModalBody">
+          <p class="text-muted">Загрузка...</p>
+        </div>
+        <div class="modal-footer" id="xrayClientModalFooter" style="flex-wrap: wrap; gap: 8px">
+          <button class="btn btn-secondary" onclick="document.getElementById('xrayClientModal').style.display='none'">Закрыть</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- XRAY ADMIN PANEL MODAL -->
+    <div id="xrayAdminModal" class="modal" style="display: none">
+      <div class="modal-content" style="max-width: 600px">
+        <div class="modal-header">
+          <h2>🔧 Управление Xray</h2>
+          <button class="modal-close" onclick="document.getElementById('xrayAdminModal').style.display='none'">&times;</button>
+        </div>
+        <div class="modal-body">
+          <div class="admin-section">
+            <h3>👥 Клиенты</h3>
+            <div class="admin-buttons">
+              <button class="btn btn-sm btn-success" onclick="xrayCard.adminAddClient()">➕ Добавить клиента</button>
+              <button class="btn btn-sm btn-danger" onclick="xrayCard.adminRemoveClient()">➖ Удалить клиента</button>
+              <button class="btn btn-sm btn-info" onclick="xrayCard.adminRenameClient()">✏️ Переименовать</button>
+              <button class="btn btn-sm btn-warning" onclick="xrayCard.adminExtendClient()">⏰ Продлить</button>
+            </div>
+          </div>
+          <div class="admin-section">
+            <h3>📊 Мониторинг</h3>
+            <div class="admin-buttons">
+              <button class="btn btn-sm btn-secondary" onclick="xrayCard.adminBansWarnings()">🚫 Баны и предупреждения</button>
+              <button class="btn btn-sm btn-secondary" onclick="xrayCard.adminCheckSubscriptions()">📋 Проверить подписки</button>
+              <button class="btn btn-sm btn-secondary" onclick="xrayCard.adminCheckTraffic()">📈 Проверить трафик</button>
+              <button class="btn btn-sm btn-secondary" onclick="xrayCard.adminCheckDevices()">📱 Проверить устройства</button>
+              <button class="btn btn-sm btn-secondary" onclick="xrayCard.adminCheckTorrents()">🧑‍💻 Проверить торренты</button>
+            </div>
+          </div>
+          <div class="admin-section">
+            <h3>📩 Запросы</h3>
+            <div class="admin-buttons">
+              <button class="btn btn-sm btn-info" onclick="xrayCard.adminRequests()">📨 Запросы на продление</button>
+            </div>
+          </div>
+          <div id="xrayAdminResult" style="margin-top: 15px"></div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" onclick="document.getElementById('xrayAdminModal').style.display='none'">Закрыть</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- XRAY LOGS MODAL -->
+    <div id="xrayLogsModal" class="modal" style="display: none">
+      <div class="modal-content" style="max-width: 800px">
+        <div class="modal-header">
+          <h2>📜 Логи Xray</h2>
+          <button class="modal-close" onclick="document.getElementById('xrayLogsModal').style.display='none'">&times;</button>
+        </div>
+        <div class="modal-body">
+          <pre id="xrayLogsContent" style="background: #1a1a2e; padding: 15px; border-radius: 8px; max-height: 500px; overflow-y: auto; font-size: 0.85em; color: #a0a0a0; white-space: pre-wrap; word-break: break-all">Загрузка...</pre>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-info" onclick="xrayCard.showLogs()">🔄 Обновить</button>
+          <button class="btn btn-secondary" onclick="document.getElementById('xrayLogsModal').style.display='none'">Закрыть</button>
+        </div>
+      </div>
+    </div>
+
     <script src="config.js"></script>
     <script src="adminui_client.js"></script>
+    <script src="xray-warp.js"></script>
   </body>
 </html>

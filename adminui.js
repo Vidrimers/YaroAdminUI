@@ -1973,6 +1973,283 @@ app.post("/api/favorite-commands/:id/move", verifyToken, async (req, res) => {
   }
 });
 
+// ==================== XRAY MANAGEMENT PROXY ====================
+const XRAY_API = "http://127.0.0.1:333";
+const XRAY_API_KEY = "REDACTED_VPN_API_KEY";
+
+async function xrayAPI(method, path, body) {
+  const opts = {
+    method,
+    headers: { "Authorization": `Bearer ${XRAY_API_KEY}`, "Content-Type": "application/json" },
+  };
+  if (body) opts.body = JSON.stringify(body);
+  const resp = await fetch(`${XRAY_API}${path}`, opts);
+  return resp.json();
+}
+
+app.get("/api/xray/clients", verifyToken, async (req, res) => {
+  try {
+    const data = await xrayAPI("GET", "/api/clients");
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+app.get("/api/xray/clients/:uuid", verifyToken, async (req, res) => {
+  try {
+    const data = await xrayAPI("GET", `/api/clients/${req.params.uuid}`);
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+app.post("/api/xray/clients", verifyToken, async (req, res) => {
+  try {
+    const data = await xrayAPI("POST", "/api/clients", req.body);
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+app.delete("/api/xray/clients/:uuid", verifyToken, async (req, res) => {
+  try {
+    const data = await xrayAPI("DELETE", `/api/clients/${req.params.uuid}`);
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+app.put("/api/xray/clients/:uuid", verifyToken, async (req, res) => {
+  try {
+    const data = await xrayAPI("PUT", `/api/clients/${req.params.uuid}`, req.body);
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+app.post("/api/xray/clients/:uuid/extend", verifyToken, async (req, res) => {
+  try {
+    const data = await xrayAPI("POST", `/api/clients/${req.params.uuid}/extend`, req.body);
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+app.post("/api/xray/clients/:uuid/block", verifyToken, async (req, res) => {
+  try {
+    const data = await xrayAPI("POST", `/api/clients/${req.params.uuid}/block`, req.body);
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+app.post("/api/xray/clients/:uuid/unblock", verifyToken, async (req, res) => {
+  try {
+    const data = await xrayAPI("POST", `/api/clients/${req.params.uuid}/unblock`);
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+app.post("/api/xray/clients/:uuid/warn", verifyToken, async (req, res) => {
+  try {
+    const data = await xrayAPI("POST", `/api/clients/${req.params.uuid}/warn`, req.body);
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+app.post("/api/xray/clients/:uuid/reset-warnings", verifyToken, async (req, res) => {
+  try {
+    const data = await xrayAPI("POST", `/api/clients/${req.params.uuid}/reset-warnings`);
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+app.put("/api/xray/clients/:uuid/device-limit", verifyToken, async (req, res) => {
+  try {
+    const data = await xrayAPI("PUT", `/api/clients/${req.params.uuid}/device-limit`, req.body);
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+app.get("/api/xray/clients/:uuid/traffic-stats", verifyToken, async (req, res) => {
+  try {
+    const data = await xrayAPI("GET", `/api/clients/${req.params.uuid}/traffic-stats`);
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+app.get("/api/xray/clients/:uuid/traffic-total", verifyToken, async (req, res) => {
+  try {
+    const data = await xrayAPI("GET", `/api/clients/${req.params.uuid}/traffic-total`);
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+app.get("/api/xray/clients/:uuid/subscription", verifyToken, async (req, res) => {
+  try {
+    const data = await xrayAPI("GET", `/api/clients/${req.params.uuid}/subscription`);
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+app.post("/api/xray/stats/clients/:uuid/reset", verifyToken, async (req, res) => {
+  try {
+    const data = await xrayAPI("POST", `/api/stats/clients/${req.params.uuid}/reset`);
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+app.get("/api/xray/extension-requests", verifyToken, async (req, res) => {
+  try {
+    const data = await xrayAPI("GET", "/api/extension-requests");
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+app.post("/api/xray/extension-requests/:id/approve", verifyToken, async (req, res) => {
+  try {
+    const data = await xrayAPI("POST", `/api/extension-requests/${req.params.id}/approve`, req.body);
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+app.post("/api/xray/extension-requests/:id/deny", verifyToken, async (req, res) => {
+  try {
+    const data = await xrayAPI("POST", `/api/extension-requests/${req.params.id}/deny`, req.body);
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+app.get("/api/xray/subscription/:uuid", verifyToken, async (req, res) => {
+  try {
+    const data = await xrayAPI("GET", `/subscription/${req.params.uuid}`);
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// Xray service management (systemctl via SSH)
+app.get("/api/xray/status", verifyToken, async (req, res) => {
+  try {
+    const ssh = new SSHHelper(SERVER_IP);
+    const output = await ssh.executeCommand("systemctl is-active xray");
+    res.json({ success: true, active: output.trim() === "active", status: output.trim() });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+app.post("/api/xray/service/:action", verifyToken, async (req, res) => {
+  try {
+    const { action } = req.params;
+    if (!["start", "stop", "restart"].includes(action)) {
+      return res.status(400).json({ success: false, message: "Invalid action" });
+    }
+    const ssh = new SSHHelper(SERVER_IP);
+    const output = await ssh.executeCommand(`systemctl ${action} xray && sleep 1 && systemctl is-active xray`);
+    res.json({ success: true, status: output.trim() });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+app.get("/api/xray/logs", verifyToken, async (req, res) => {
+  try {
+    const ssh = new SSHHelper(SERVER_IP);
+    const output = await ssh.executeCommand("journalctl -u xray --no-pager -n 50 --output=short-iso");
+    res.json({ success: true, logs: output });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// WARP domain management
+app.get("/api/xray/warp-status", verifyToken, async (req, res) => {
+  try {
+    const ssh = new SSHHelper(SERVER_IP);
+    const output = await ssh.executeCommand("warp-cli status 2>/dev/null || echo 'not available'");
+    const connected = output.includes("Connected");
+    res.json({ success: true, connected, status: output.trim() });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+app.get("/api/xray/warp-domains", verifyToken, async (req, res) => {
+  try {
+    const ssh = new SSHHelper(SERVER_IP);
+    const output = await ssh.executeCommand("cat /usr/local/etc/xray/config.json");
+    const config = JSON.parse(output);
+    const warpRule = config.routing?.rules?.find(r => r.outboundTag === "warp");
+    const domains = warpRule?.domain || [];
+    res.json({ success: true, domains });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+app.post("/api/xray/warp-domains", verifyToken, async (req, res) => {
+  try {
+    const { domain, action } = req.body; // action: "add" or "remove"
+    const ssh = new SSHHelper(SERVER_IP);
+    const output = await ssh.executeCommand("cat /usr/local/etc/xray/config.json");
+    const config = JSON.parse(output);
+    const warpRule = config.routing?.rules?.find(r => r.outboundTag === "warp");
+    if (!warpRule) return res.status(400).json({ success: false, message: "WARP routing rule not found" });
+
+    if (action === "add") {
+      if (!warpRule.domain.includes(domain)) warpRule.domain.push(`domain:${domain}`);
+    } else if (action === "remove") {
+      warpRule.domain = warpRule.domain.filter(d => d !== `domain:${domain}` && d !== domain);
+    } else {
+      return res.status(400).json({ success: false, message: "Invalid action" });
+    }
+
+    // Backup, write, validate, restart
+    const configStr = JSON.stringify(config, null, 2);
+    await ssh.executeCommand(`cp /usr/local/etc/xray/config.json /usr/local/etc/xray/config.json.bak`);
+    // Write via base64 to avoid escaping issues
+    const b64 = Buffer.from(configStr).toString("base64");
+    await ssh.executeCommand(`echo '${b64}' | base64 -d > /usr/local/etc/xray/config.json`);
+    await ssh.executeCommand("xray run -test -c /usr/local/etc/xray/config.json 2>&1 || (cp /usr/local/etc/xray/config.json.bak /usr/local/etc/xray/config.json && echo 'RESTORED')");
+    await ssh.executeCommand("systemctl restart xray");
+
+    res.json({ success: true, domains: warpRule.domain });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
 const server = app.listen(PORT, HOST, () => {
   console.log(`\n🚀 YaroAdminUI Server Started on http://${HOST}:${PORT}\n`);
 });

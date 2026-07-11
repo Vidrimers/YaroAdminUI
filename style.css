@@ -1360,81 +1360,6 @@ body.theme-cyberpunk .card-header h2 {
 }
 
 /* VPN Configuration Styles */
-.vpn-config-section {
-  background: rgba(0, 0, 0, 0.2);
-  padding: 15px;
-  border-radius: 6px;
-  margin-bottom: 15px;
-  border-left: 3px solid #667eea;
-}
-
-.vpn-config-section h3 {
-  color: #667eea;
-  font-size: 1.1em;
-  margin-bottom: 12px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.vpn-config-form {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.vpn-config-form label {
-  font-size: 0.9em;
-  color: #b0b0b0;
-  margin-bottom: 4px;
-  display: block;
-}
-
-.vpn-config-form input,
-.vpn-config-form textarea,
-.vpn-config-form select {
-  padding: 8px 12px;
-  border: 1px solid #667eea;
-  border-radius: 4px;
-  background: rgba(102, 126, 234, 0.05);
-  color: #e0e0e0;
-  font-size: 0.9em;
-}
-
-.vpn-config-form input:focus,
-.vpn-config-form textarea:focus,
-.vpn-config-form select:focus {
-  outline: none;
-  border-color: #8892f0;
-  box-shadow: 0 0 8px rgba(102, 126, 234, 0.3);
-  background: rgba(102, 126, 234, 0.1);
-}
-
-.vpn-status {
-  display: inline-block;
-  padding: 6px 12px;
-  border-radius: 20px;
-  font-size: 0.85em;
-  font-weight: 500;
-}
-
-.vpn-status.active {
-  background: rgba(76, 175, 80, 0.2);
-  color: #4caf50;
-  border: 1px solid #4caf50;
-}
-
-.vpn-status.inactive {
-  background: rgba(244, 67, 54, 0.2);
-  color: #f44336;
-  border: 1px solid #f44336;
-}
-
-.vpn-status.connecting {
-  background: rgba(255, 193, 7, 0.2);
-  color: #ffc107;
-  border: 1px solid #ffc107;
-}
 
 /* ==================== MODAL ==================== */
 .modal {
@@ -1662,4 +1587,41 @@ body.theme-cyberpunk .card-header h2 {
   display: flex;
   gap: 5px;
   flex-shrink: 0;
+}
+
+/* ==================== XRAY CARD ==================== */
+.xray-client-row:hover {
+  background: rgba(255, 255, 255, 0.08) !important;
+}
+
+.info-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 6px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.info-label {
+  color: #888;
+  font-weight: 500;
+  white-space: nowrap;
+  min-width: 120px;
+}
+
+.admin-section {
+  margin-bottom: 20px;
+}
+
+.admin-section h3 {
+  font-size: 1em;
+  margin-bottom: 10px;
+  color: #b0b0b0;
+}
+
+.admin-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
