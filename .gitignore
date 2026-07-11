@@ -22,5 +22,6 @@ stopadminui.sh
 stopadminuibot.sh
 russian-language.md
 roadmap.txt
+NetworkLog.ps1
 
 DISCORD_OAUTH_SETUP.md

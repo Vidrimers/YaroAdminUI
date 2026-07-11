@@ -24,17 +24,20 @@ const SERVERS = {
   intel: {
     ip: process.env.SERVER_INTEL_IP || '10.0.0.5',
     mac: process.env.SERVER_INTEL_MAC || 'd8:bb:c1:09:14:65',
-    name: 'Server Intel'
+    name: 'Server Intel',
+    user: 'vidrimers'
   },
   r3: {
     ip: process.env.SERVER_R3_IP || '10.0.0.3',
     mac: process.env.SERVER_R3_MAC || '68:1d:ef:60:de:c9',
-    name: 'Server R3'
+    name: 'Server R3',
+    user: 'vidrimers'
   },
   b650: {
     ip: process.env.SERVER_B650_IP || '10.0.0.2',
     mac: process.env.SERVER_B650_MAC || 'd8:43:ae:99:d2:5f',
-    name: 'dmd-b650'
+    name: 'dmd-b650',
+    user: 'vidri'
   }
 };
 
@@ -288,7 +291,9 @@ function executeSSHOnServer(host, command) {
 
     conn.on('ready', () => {
       // SSH from VPS to local server using vps_to_local key
-      conn.exec(`ssh -i /root/.ssh/vps_to_local -o StrictHostKeyChecking=no vidrimers@${host} "${command}"`, (err, stream) => {
+      // Look up correct username from SERVERS config by IP
+      const srvUser = Object.values(SERVERS).find(s => s.ip === host)?.user || 'vidrimers';
+      conn.exec(`ssh -i /root/.ssh/vps_to_local -o StrictHostKeyChecking=no ${srvUser}@${host} "${command}"`, (err, stream) => {
         if (err) { conn.end(); return reject(err); }
         let output = '';
         let errorOutput = '';
@@ -614,7 +619,7 @@ function getB650OffKeyboard() {
   };
 }
 
-// Poll a local server (10.0.0.x) via VPS → router → server
+// Poll a local server (10.0.0.x) — VPS has awg0 route to 10.0.0.0/24, so ping directly
 function checkLocalServer(ip) {
   return new Promise((resolve, reject) => {
     const conn = new SSHClient();
@@ -633,13 +638,13 @@ function checkLocalServer(ip) {
     }
 
     conn.on('ready', () => {
-      // VPS → router (port 2222) → local server
-      conn.exec(`ssh -o StrictHostKeyChecking=no -i /root/.ssh/vps_to_local -p 2222 root@127.0.0.1 'dbclient -y -i /root/.ssh/router_to_vps vidri@${ip} hostname'`, (err, stream) => {
+      // Ping directly from VPS via awg0 tunnel (10.0.0.0/24 routed through awg0)
+      conn.exec(`ping -c 1 -W 2 ${ip}`, (err, stream) => {
         if (err) { conn.end(); return reject(err); }
         let output = '';
         stream.on('close', (code) => {
           conn.end();
-          if (code !== 0) reject(new Error(`exit ${code}`));
+          if (code !== 0) reject(new Error(`ping failed with code ${code}`));
           else resolve(output);
         }).on('data', (data) => { output += data.toString(); })
           .stderr.on('data', () => {});
@@ -858,7 +863,7 @@ bot.on('callback_query', async (query) => {
       try {
         if (newState) {
           // Add to Windows autostart via registry
-          await executeSSHOnWindows('New-ItemProperty -Path "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run" -Name "NetworkLog" -Value "powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\\NetworkLogs\\NetworkLog.ps1" -PropertyType String -Force');
+          await executeSSHOnWindows('New-ItemProperty -Path "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run" -Name "NetworkLog" -Value "powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File C:\\NetworkLogs\\NetworkLog.ps1" -PropertyType String -Force');
           // Start NetworkLog.ps1 now
           await executeSSHOnWindows('Start-Process powershell -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File C:\\NetworkLogs\\NetworkLog.ps1" -WindowStyle Hidden');
           bot.answerCallbackQuery(query.id, { text: 'Авто-перезапуск ВКЛ + мониторинг запущен + автозапуск настроен' });
