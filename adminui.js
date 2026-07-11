@@ -1975,9 +1975,9 @@ app.post("/api/favorite-commands/:id/move", verifyToken, async (req, res) => {
 });
 
 // ==================== XRAY MANAGEMENT PROXY ====================
-const XRAY_API = "http://127.0.0.1:333";
-const XRAY_API_KEY = "REDACTED_VPN_API_KEY";
-const TG_BOT_TOKEN = "REDACTED_BOT_TOKEN";
+const XRAY_API = process.env.VPN_API_URL || "http://127.0.0.1:333";
+const XRAY_API_KEY = process.env.VPN_API_KEY || "";
+const TG_BOT_TOKEN = process.env.VPN_BOT_TOKEN || "";
 
 async function sendTelegramMessage(chatId, text) {
   if (!chatId || !TG_BOT_TOKEN) return;
@@ -2257,9 +2257,9 @@ app.post("/api/xray/checkers/:script", verifyToken, async (req, res) => {
   }
   const checkerEnv = {
     ...process.env,
-    API_KEY: "REDACTED_VPN_API_KEY",
-    API_BASE_URL: "http://127.0.0.1:333",
-    SERVER_IP: "1xbetlineboom.xyz",
+    API_KEY: process.env.VPN_API_KEY || "",
+    API_BASE_URL: process.env.VPN_API_URL || "http://127.0.0.1:333",
+    SERVER_IP: process.env.VPN_SERVER_IP || "1xbetlineboom.xyz",
   };
   try {
     const output = await new Promise((resolve) => {
