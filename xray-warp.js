@@ -570,13 +570,11 @@ const xrayCard = {
   async adminSetTrafficLimitAll() {
     if (!this.clients.length) { XrayModal.show("Лимит для всех", '<p class="text-muted">Нет клиентов</p>'); return; }
 
-    // Find default limit (most common among non-Admin clients)
     const nonAdmin = this.clients.filter(c => (c.name || "").toLowerCase() !== "admin");
     const limitCounts = {};
     nonAdmin.forEach(c => { limitCounts[c.traffic_limit_gb] = (limitCounts[c.traffic_limit_gb] || 0) + 1; });
     const defaultLimit = Object.entries(limitCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || 100;
 
-    // Show which clients have custom limits
     const customClients = nonAdmin.filter(c => c.traffic_limit_gb != defaultLimit);
     let infoHtml = `<p>Текущий лимит по умолчанию: <b>${defaultLimit} GB</b></p>`;
     infoHtml += `<p>Admin будет пропущен.</p>`;
@@ -586,10 +584,15 @@ const xrayCard = {
     } else {
       infoHtml += '<p style="color: #4caf50; margin-top: 10px">Все клиенты имеют одинаковый лимит.</p>';
     }
+    infoHtml += `<div style="margin-top: 15px"><label style="font-weight: 500; display: block; margin-bottom: 5px">Новый лимит для всех (GB):</label><input type="number" id="bulkLimitInput" value="${defaultLimit}" style="width: 100%; padding: 10px 14px; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.15); border-radius: 6px; color: #e0e0e0; font-size: 0.95em; box-sizing: border-box"></div>`;
 
-    await XrayModal.show("Лимит для всех", infoHtml);
+    const result = await XrayModal.show("Лимит для всех", infoHtml, [
+      { text: "Отмена", class: "btn-secondary" },
+      { text: "Применить", class: "btn-success" },
+    ]);
 
-    const newLimit = await XrayModal.prompt("Новый лимит для всех (GB)", "Введите значение", String(defaultLimit));
+    if (result !== 1) return;
+    const newLimit = document.getElementById("bulkLimitInput")?.value;
     if (!newLimit) return;
 
     const toast = window.adminUI?.toastManager;
