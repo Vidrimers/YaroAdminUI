@@ -606,7 +606,6 @@ class UIController {
           
           // Then show debug info
           const result = await this.api.executeCommand("check-pm2");
-          console.log("PM2 check output:", result.output);
         } catch (error) {
           this.toast.error("Ошибка проверки PM2: " + error.message);
         } finally {
@@ -916,11 +915,6 @@ class UIController {
       const pm2List = document.getElementById("pm2List");
       pm2List.innerHTML = "";
 
-      console.log("Full services response:", response);
-      console.log("PM2 Response:", response.pm2);
-      console.log("PM2 available:", response.pm2Available);
-      console.log("PM2 length:", response.pm2 ? response.pm2.length : 0);
-
       if (response.pm2 && response.pm2.length > 0) {
         response.pm2.forEach((process) => {
           const item = document.createElement("div");
@@ -951,7 +945,6 @@ class UIController {
           pm2List.appendChild(item);
         });
       } else {
-        console.warn("No PM2 processes found in response");
         if (response.pm2Available === false) {
           pm2List.innerHTML =
             '<p class="text-muted">PM2 не установлен на сервере или нет запущенных процессов</p>';
@@ -1232,7 +1225,6 @@ class UIController {
             // Show output in terminal
             if (result.output) {
               this.addToTerminal(result.output, 'output');
-              console.log("Script output:", result.output);
             } else {
               this.addToTerminal('Выполнено успешно', 'success');
             }
@@ -1658,7 +1650,6 @@ class UIController {
         }
       });
 
-      console.log("Card layout restored");
     } catch (error) {
       console.error("Error restoring card layout:", error);
     }
@@ -2253,7 +2244,6 @@ class UIController {
       localStorage.setItem("collapsedCards", JSON.stringify(collapsedCards));
 
       // If you want to sync to database, add cardCollapsed to your syncSettingsToDatabase
-      console.log("Collapsed cards state:", collapsedCards);
     } catch (error) {
       console.error("Error syncing collapse state:", error);
     }
@@ -2286,7 +2276,6 @@ class UIController {
       }
 
       const data = await response.json();
-      console.log("Settings synced to database:", data);
     } catch (error) {
       console.error("Error syncing settings to database:", error);
     }
@@ -2310,15 +2299,12 @@ class UIController {
         // Only update localStorage if database has data (don't override with empty)
         if (Object.keys(data.cardLayouts).length > 0) {
           localStorage.setItem("cardLayout", JSON.stringify(data.cardLayouts));
-          console.log("Card layouts loaded from database:", data.cardLayouts);
         }
         if (Object.keys(data.cardHeights).length > 0) {
           localStorage.setItem("cardHeights", JSON.stringify(data.cardHeights));
-          console.log("Card heights loaded from database:", data.cardHeights);
         }
         if (data.hiddenCards && Object.keys(data.hiddenCards).length > 0) {
           localStorage.setItem("hiddenCards", JSON.stringify(data.hiddenCards));
-          console.log("Hidden cards loaded from database:", data.hiddenCards);
         }
       }
     } catch (error) {
@@ -2565,7 +2551,6 @@ class UIController {
       currentThemeEl.textContent = themeNames[theme] || theme;
     }
 
-    console.log("Theme applied:", theme);
   }
 
   setupNotificationsUI() {
