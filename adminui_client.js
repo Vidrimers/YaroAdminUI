@@ -1280,6 +1280,7 @@ class UIController {
     try {
       const response = await this.api.getLogs();
       const logsList = document.getElementById("logsList");
+      if (!logsList) return;
       logsList.innerHTML = "";
 
       if (response.logs && response.logs.length > 0) {
