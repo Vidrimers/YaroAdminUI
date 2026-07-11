@@ -2246,6 +2246,24 @@ app.get("/api/xray/logs", verifyToken, async (req, res) => {
   }
 });
 
+// Run checker scripts
+const CHECKER_DIR = "/home/yaronetworktool-bot/bot";
+
+app.post("/api/xray/checkers/:script", verifyToken, async (req, res) => {
+  const { script } = req.params;
+  const allowed = ["subscription-checker", "traffic-checker", "device-monitor", "torrent-detector"];
+  if (!allowed.includes(script)) {
+    return res.status(400).json({ success: false, message: "Unknown script" });
+  }
+  try {
+    const output = await execAsync(`cd ${CHECKER_DIR} && node ${script}.js 2>&1`, 30000);
+    res.json({ success: true, output });
+  } catch (err) {
+    // Script may exit non-zero but still produce useful output
+    res.json({ success: true, output: err.stdout || err.message });
+  }
+});
+
 // WARP domain management (local file operations — server runs on VPS)
 const XRAY_CONFIG = "/usr/local/etc/xray/config.json";
 

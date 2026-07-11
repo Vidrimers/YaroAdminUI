@@ -483,19 +483,43 @@ const xrayCard = {
   },
 
   async adminCheckSubscriptions() {
-    this.adminResult('<p class="text-muted">⚠️ Проверка подписок доступна через Telegram бот</p>');
+    this.adminResult('<p class="text-muted">⏳ Проверка подписок...</p>');
+    try {
+      const data = await this.api("POST", "/checkers/subscription-checker");
+      this.adminResult(`<pre style="background: rgba(0,0,0,0.3); padding: 12px; border-radius: 8px; max-height: 400px; overflow-y: auto; font-size: 0.85em; color: #a0a0a0; white-space: pre-wrap; word-break: break-all">${XrayModal._esc(data.output || "Нет вывода")}</pre>`);
+    } catch (err) {
+      this.adminResult(`<p class="text-muted">Ошибка: ${err.message}</p>`);
+    }
   },
 
   async adminCheckTraffic() {
-    this.adminResult('<p class="text-muted">⚠️ Проверка трафика доступна через Telegram бот</p>');
+    this.adminResult('<p class="text-muted">⏳ Проверка трафика...</p>');
+    try {
+      const data = await this.api("POST", "/checkers/traffic-checker");
+      this.adminResult(`<pre style="background: rgba(0,0,0,0.3); padding: 12px; border-radius: 8px; max-height: 400px; overflow-y: auto; font-size: 0.85em; color: #a0a0a0; white-space: pre-wrap; word-break: break-all">${XrayModal._esc(data.output || "Нет вывода")}</pre>`);
+    } catch (err) {
+      this.adminResult(`<p class="text-muted">Ошибка: ${err.message}</p>`);
+    }
   },
 
   async adminCheckDevices() {
-    this.adminResult('<p class="text-muted">⚠️ Проверка устройств доступна через Telegram бот</p>');
+    this.adminResult('<p class="text-muted">⏳ Проверка устройств...</p>');
+    try {
+      const data = await this.api("POST", "/checkers/device-monitor");
+      this.adminResult(`<pre style="background: rgba(0,0,0,0.3); padding: 12px; border-radius: 8px; max-height: 400px; overflow-y: auto; font-size: 0.85em; color: #a0a0a0; white-space: pre-wrap; word-break: break-all">${XrayModal._esc(data.output || "Нет вывода")}</pre>`);
+    } catch (err) {
+      this.adminResult(`<p class="text-muted">Ошибка: ${err.message}</p>`);
+    }
   },
 
   async adminCheckTorrents() {
-    this.adminResult('<p class="text-muted">⚠️ Проверка торрентов доступна через Telegram бот</p>');
+    this.adminResult('<p class="text-muted">⏳ Проверка торрентов...</p>');
+    try {
+      const data = await this.api("POST", "/checkers/torrent-detector");
+      this.adminResult(`<pre style="background: rgba(0,0,0,0.3); padding: 12px; border-radius: 8px; max-height: 400px; overflow-y: auto; font-size: 0.85em; color: #a0a0a0; white-space: pre-wrap; word-break: break-all">${XrayModal._esc(data.output || "Нет вывода")}</pre>`);
+    } catch (err) {
+      this.adminResult(`<p class="text-muted">Ошибка: ${err.message}</p>`);
+    }
   },
 
   async adminRequests() {
