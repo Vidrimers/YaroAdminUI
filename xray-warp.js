@@ -199,14 +199,21 @@ const xrayCard = {
 
   async api(method, path, body) {
     const token = localStorage.getItem("admin_token");
-    const opts = {
-      method,
-      headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
-    };
-    if (body) opts.body = JSON.stringify(body);
-    const resp = await fetch(`/api/xray${path}`, opts);
-    if (resp.status === 401) { localStorage.clear(); location.reload(); return null; }
-    return resp.json();
+    const ctrl = new AbortController();
+    const timeout = setTimeout(() => ctrl.abort(), 15000);
+    try {
+      const opts = {
+        method,
+        headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
+        signal: ctrl.signal,
+      };
+      if (body) opts.body = JSON.stringify(body);
+      const resp = await fetch(`/api/xray${path}`, opts);
+      if (resp.status === 401) { localStorage.clear(); location.reload(); return null; }
+      return await resp.json();
+    } finally {
+      clearTimeout(timeout);
+    }
   },
 
   async checkStatus() {
@@ -248,8 +255,14 @@ const xrayCard = {
       this.clients = data.clients || [];
       if (!this.clients.length) { list.innerHTML = '<p class="text-muted">Нет клиентов</p>'; return; }
 
-      const statsPromises = this.clients.map(c => this.api("GET", `/clients/${c.uuid}/traffic-stats`).catch(() => null));
-      const statsResults = await Promise.all(statsPromises);
+      // Fetch traffic stats with timeout fallback
+      let statsResults = [];
+      try {
+        const statsPromises = this.clients.map(c => this.api("GET", `/clients/${c.uuid}/traffic-stats`).catch(() => null));
+        statsResults = await Promise.all(statsPromises);
+      } catch (e) {
+        statsResults = this.clients.map(() => null);
+      }
 
       // Merge stats into clients
       this._clientsData = this.clients.map((c, i) => ({
@@ -709,14 +722,21 @@ const warpCard = {
 
   async api(method, path, body) {
     const token = localStorage.getItem("admin_token");
-    const opts = {
-      method,
-      headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
-    };
-    if (body) opts.body = JSON.stringify(body);
-    const resp = await fetch(`/api/xray${path}`, opts);
-    if (resp.status === 401) { localStorage.clear(); location.reload(); return null; }
-    return resp.json();
+    const ctrl = new AbortController();
+    const timeout = setTimeout(() => ctrl.abort(), 15000);
+    try {
+      const opts = {
+        method,
+        headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
+        signal: ctrl.signal,
+      };
+      if (body) opts.body = JSON.stringify(body);
+      const resp = await fetch(`/api/xray${path}`, opts);
+      if (resp.status === 401) { localStorage.clear(); location.reload(); return null; }
+      return await resp.json();
+    } finally {
+      clearTimeout(timeout);
+    }
   },
 
   async checkStatus() {
