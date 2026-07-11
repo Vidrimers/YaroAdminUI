@@ -2255,12 +2255,21 @@ app.post("/api/xray/checkers/:script", verifyToken, async (req, res) => {
   if (!allowed.includes(script)) {
     return res.status(400).json({ success: false, message: "Unknown script" });
   }
+  const checkerEnv = {
+    ...process.env,
+    API_KEY: "REDACTED_VPN_API_KEY",
+    API_BASE_URL: "http://127.0.0.1:333",
+    SERVER_IP: "1xbetlineboom.xyz",
+  };
   try {
-    const output = await execAsync(`cd ${CHECKER_DIR} && node ${script}.js 2>&1`, 30000);
+    const output = await new Promise((resolve) => {
+      exec(`cd ${CHECKER_DIR} && node ${script}.js 2>&1`, { env: checkerEnv, timeout: 30000 }, (err, stdout) => {
+        resolve(stdout || err.message);
+      });
+    });
     res.json({ success: true, output });
   } catch (err) {
-    // Script may exit non-zero but still produce useful output
-    res.json({ success: true, output: err.stdout || err.message });
+    res.json({ success: true, output: err.message });
   }
 });
 
