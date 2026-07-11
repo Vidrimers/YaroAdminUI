@@ -578,15 +578,18 @@ const xrayCard = {
 
     // Show which clients have custom limits
     const customClients = nonAdmin.filter(c => c.traffic_limit_gb != defaultLimit);
-    let msg = `Текущий лимит по умолчанию: ${defaultLimit} GB\n\n`;
+    let infoHtml = `<p>Текущий лимит по умолчанию: <b>${defaultLimit} GB</b></p>`;
+    infoHtml += `<p>Admin будет пропущен.</p>`;
     if (customClients.length) {
-      msg += "Индивидуальные лимиты (не будут изменены):\n";
-      customClients.forEach(c => { msg += `  ${c.name}: ${c.traffic_limit_gb} GB\n`; });
-      msg += "\n";
+      infoHtml += '<p style="color: #ff9800; margin-top: 10px"><b>Индивидуальные лимиты (не будут изменены):</b></p>';
+      infoHtml += customClients.map(c => `<div style="padding: 4px 0; color: #ccc">• ${XrayModal._esc(c.name)}: <b>${c.traffic_limit_gb} GB</b></div>`).join("");
+    } else {
+      infoHtml += '<p style="color: #4caf50; margin-top: 10px">Все клиенты имеют одинаковый лимит.</p>';
     }
-    msg += "Admin будет пропущен.\n\nВведите новый лимит для всех:";
 
-    const newLimit = await XrayModal.prompt("Лимит для всех (GB)", msg, String(defaultLimit));
+    await XrayModal.show("Лимит для всех", infoHtml);
+
+    const newLimit = await XrayModal.prompt("Новый лимит для всех (GB)", "Введите значение", String(defaultLimit));
     if (!newLimit) return;
 
     const toast = window.adminUI?.toastManager;
