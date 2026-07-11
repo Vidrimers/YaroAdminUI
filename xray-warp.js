@@ -314,7 +314,8 @@ const xrayCard = {
       } else {
         btns.push(`<button class="btn btn-sm btn-danger" onclick="xrayCard.clientBlock('${uuid}')">🚫 Заблокировать</button>`);
       }
-      btns.push(`<button class="btn btn-sm btn-info" onclick="xrayCard.clientShowSub('${uuid}')">📋 Ссылка</button>`);
+      btns.push(`<button class="btn btn-sm btn-info" onclick="xrayCard.clientShowSubUrl('${uuid}')">🔗 Подписка</button>`);
+      btns.push(`<button class="btn btn-sm btn-info" onclick="xrayCard.clientShowSub('${uuid}')">📋 Ссылки</button>`);
       btns.push(`<button class="btn btn-sm btn-warning" onclick="xrayCard.clientExtend('${uuid}')">⏰ Продлить</button>`);
       btns.push(`<button class="btn btn-sm btn-secondary" onclick="xrayCard.clientWarn('${uuid}')">⚠️ Предупреждение</button>`);
       btns.push(`<button class="btn btn-sm btn-secondary" onclick="xrayCard.clientAction('${uuid}','reset-warnings')">🔄 Сброс предупр.</button>`);
@@ -367,6 +368,21 @@ const xrayCard = {
     }
   },
 
+  async clientShowSubUrl(uuid) {
+    const url = `https://1xbetlineboom.xyz/subscription/${uuid}`;
+    const body = document.getElementById("xrayClientModalBody");
+    // Remove existing sub sections
+    body.querySelectorAll(".sub-section").forEach(el => el.remove());
+    const div = document.createElement("div");
+    div.className = "sub-section";
+    div.style.cssText = "margin-top: 15px";
+    div.innerHTML = `
+      <label style="font-weight: 500; display: block; margin-bottom: 5px">🔗 Ссылка подписки:</label>
+      <input readonly value="${XrayModal._esc(url)}" style="width: 100%; padding: 10px; background: rgba(0,0,0,0.3); color: #4caf50; border: 1px solid rgba(255,255,255,0.15); border-radius: 6px; font-family: monospace; font-size: 0.85em; box-sizing: border-box">
+      <button class="btn btn-sm btn-success" style="margin-top: 8px" onclick="navigator.clipboard.writeText(this.previousElementSibling.value); window.adminUI?.toastManager?.success('Скопировано!')">📋 Копировать</button>`;
+    body.appendChild(div);
+  },
+
   async clientShowSub(uuid) {
     const toast = window.adminUI?.toastManager;
     try {
@@ -376,12 +392,15 @@ const xrayCard = {
       const links = data.links || data.subscription || data;
       const text = typeof links === "string" ? links : JSON.stringify(links, null, 2);
       const body = document.getElementById("xrayClientModalBody");
-      body.innerHTML += `
-        <div style="margin-top: 15px">
-          <label style="font-weight: 500; display: block; margin-bottom: 5px">Ссылка подключения:</label>
-          <textarea readonly style="width: 100%; height: 80px; background: rgba(0,0,0,0.3); color: #4caf50; border: 1px solid rgba(255,255,255,0.15); border-radius: 6px; padding: 10px; font-family: monospace; font-size: 0.8em; resize: vertical">${XrayModal._esc(text)}</textarea>
-          <button class="btn btn-sm btn-success" style="margin-top: 8px" onclick="navigator.clipboard.writeText(this.previousElementSibling.value); window.adminUI?.toastManager?.success('Скопировано!')">📋 Копировать</button>
-        </div>`;
+      body.querySelectorAll(".sub-section").forEach(el => el.remove());
+      const div = document.createElement("div");
+      div.className = "sub-section";
+      div.style.cssText = "margin-top: 15px";
+      div.innerHTML = `
+        <label style="font-weight: 500; display: block; margin-bottom: 5px">📋 Vless ссылки:</label>
+        <textarea readonly style="width: 100%; height: 80px; background: rgba(0,0,0,0.3); color: #4caf50; border: 1px solid rgba(255,255,255,0.15); border-radius: 6px; padding: 10px; font-family: monospace; font-size: 0.8em; resize: vertical">${XrayModal._esc(text)}</textarea>
+        <button class="btn btn-sm btn-success" style="margin-top: 8px" onclick="navigator.clipboard.writeText(this.previousElementSibling.value); window.adminUI?.toastManager?.success('Скопировано!')">📋 Копировать</button>`;
+      body.appendChild(div);
     } catch (err) {
       if (toast) toast.error(err.message);
     }
