@@ -2128,6 +2128,15 @@ app.get("/api/xray/clients/:uuid/subscription", verifyToken, async (req, res) =>
   }
 });
 
+app.get("/api/xray/stats/clients/:uuid/traffic", verifyToken, async (req, res) => {
+  try {
+    const data = await xrayAPI("GET", `/api/stats/clients/${req.params.uuid}/traffic`);
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
 app.post("/api/xray/stats/clients/:uuid/reset", verifyToken, async (req, res) => {
   try {
     const data = await xrayAPI("POST", `/api/stats/clients/${req.params.uuid}/reset`);
