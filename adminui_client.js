@@ -798,16 +798,31 @@ class UIController {
     }
   }
 
+  isCardHidden(elementId) {
+    const el = document.getElementById(elementId);
+    if (!el) return true;
+    const card = el.closest(".card");
+    return card ? card.style.display === "none" : false;
+  }
+
   async loadDashboardData() {
     try {
       const status = await this.api.getServerStatus();
       this.updateServerStatus(status);
 
       // await this.loadSSHKeys(); // Disabled - keys now shown only in modal
-      await this.loadServices();
-      await this.loadPorts();
-      await this.loadProcesses();
-      await this.loadLogs();
+      if (!this.isCardHidden("systemctlList") || !this.isCardHidden("pm2List")) {
+        await this.loadServices();
+      }
+      if (!this.isCardHidden("portsList") || !this.isCardHidden("firewallRules")) {
+        await this.loadPorts();
+      }
+      if (!this.isCardHidden("processesList")) {
+        await this.loadProcesses();
+      }
+      if (!this.isCardHidden("logsList")) {
+        await this.loadLogs();
+      }
       await this.loadNotifications();
     } catch (error) {
       this.toast.error("Ошибка загрузки данных: " + error.message);
@@ -957,8 +972,10 @@ class UIController {
       // Setup service action listeners
       this.setupServiceControls();
 
-      // Load scripts
-      await this.loadScripts();
+      // Load scripts (if scripts card visible)
+      if (!this.isCardHidden("scriptsList")) {
+        await this.loadScripts();
+      }
     } catch (error) {
       console.error("Error loading services:", error);
       const systemctlList = document.getElementById("systemctlList");
@@ -2074,7 +2091,7 @@ class UIController {
     const screenList = document.getElementById("screenProcessesList");
     const refreshBtn = document.getElementById("screenRefreshBtn");
 
-    if (!screenList || !refreshBtn) return;
+    if (!screenList || !refreshBtn || this.isCardHidden("screenProcessesList")) return;
 
     const loadScreenProcesses = async () => {
       try {
