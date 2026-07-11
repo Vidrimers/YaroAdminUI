@@ -322,13 +322,96 @@ const xrayCard = {
     const toast = window.adminUI?.toastManager;
     try {
       const data = await this.api("GET", "/extension-requests");
-      const requests = data.requests || data || [];
-      if (!requests.length) { this.adminResult('<p class="text-muted">Нет запросов</p>'); return; }
-      this.adminResult(requests.slice(0, 10).map(r => `
-        <div style="padding: 8px; background: rgba(255,255,255,0.04); border-radius: 6px; margin-bottom: 6px">
-          <span style="color: ${r.status === 'pending' ? '#ff9800' : r.status === 'approved' ? '#4caf50' : '#f44336'}">[${r.status}]</span>
-          UUID: ${r.client_uuid?.slice(0, 8)}... — ${r.requested_days || r.requested_months * 30} дн.
-        </div>`).join(""));
+      const requests = data.requests || [];
+      const pending = requests.filter(r => r.status === "pending");
+      const approved = requests.filter(r => r.status === "approved");
+      const denied = requests.filter(r => r.status === "denied");
+
+      let html = `
+        <div style="display: flex; gap: 12px; margin-bottom: 15px; flex-wrap: wrap">
+          <span style="color: #ff9800; font-weight: 600">⏳ Ожидают: ${pending.length}</span>
+          <span style="color: #4caf50">✅ Одобрено: ${approved.length}</span>
+          <span style="color: #f44336">❌ Отклонено: ${denied.length}</span>
+        </div>`;
+
+      if (pending.length) {
+        html += '<h3 style="font-size: 1em; margin-bottom: 10px; color: #ff9800">⏳ Ожидают обработки</h3>';
+        html += pending.slice(0, 10).map(r => `
+          <div style="padding: 10px; background: rgba(255,152,0,0.08); border: 1px solid rgba(255,152,0,0.2); border-radius: 8px; margin-bottom: 8px">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px">
+              <div>
+                <strong>${this.esc(r.client_name || "Unknown")}</strong>
+                <span style="color: #888; font-size: 0.85em; margin-left: 8px">${r.requested_days || r.requested_months * 30} дн.</span>
+              </div>
+              <span style="color: #888; font-size: 0.8em">${new Date(r.created_at).toLocaleDateString("ru-RU")}</span>
+            </div>
+            <div style="display: flex; gap: 6px">
+              <button class="btn btn-sm btn-success" onclick="xrayCard.approveRequest('${r.id}', '${this.esc(r.client_name)}')">✅ Одобрить</button>
+              <button class="btn btn-sm btn-secondary" onclick="xrayCard.approveRequestCustom('${r.id}', '${this.esc(r.client_name)}')">📅 Свой срок</button>
+              <button class="btn btn-sm btn-danger" onclick="xrayCard.denyRequest('${r.id}', '${this.esc(r.client_name)}')">❌ Отклонить</button>
+            </div>
+          </div>`).join("");
+      } else {
+        html += '<p class="text-muted" style="margin-bottom: 15px">Нет ожидающих запросов</p>';
+      }
+
+      if (approved.length) {
+        html += '<h3 style="font-size: 1em; margin: 15px 0 10px; color: #4caf50">✅ Одобренные (последние 5)</h3>';
+        html += approved.slice(0, 5).map(r => `
+          <div style="padding: 8px 12px; background: rgba(76,175,80,0.06); border-radius: 6px; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center">
+            <span>${this.esc(r.client_name || "Unknown")} — ${r.approved_days || r.requested_days} дн.</span>
+            <span style="color: #888; font-size: 0.8em">${new Date(r.processed_at).toLocaleDateString("ru-RU")}</span>
+          </div>`).join("");
+      }
+
+      if (denied.length) {
+        html += '<h3 style="font-size: 1em; margin: 15px 0 10px; color: #f44336">❌ Отклонённые (последние 5)</h3>';
+        html += denied.slice(0, 5).map(r => `
+          <div style="padding: 8px 12px; background: rgba(244,67,54,0.06); border-radius: 6px; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center">
+            <span>${this.esc(r.client_name || "Unknown")} — ${r.denial_reason || "Без причины"}</span>
+            <span style="color: #888; font-size: 0.8em">${new Date(r.processed_at).toLocaleDateString("ru-RU")}</span>
+          </div>`).join("");
+      }
+
+      this.adminResult(html);
+    } catch (err) {
+      if (toast) toast.error(err.message);
+    }
+  },
+
+  async approveRequest(id, name) {
+    if (!confirm(`Одобрить запрос от ${name}?`)) return;
+    const toast = window.adminUI?.toastManager;
+    try {
+      await this.api("POST", `/extension-requests/${id}/approve`, { admin_telegram_id: 137981675 });
+      if (toast) toast.success(`Запрос ${name} одобрен`);
+      this.adminRequests();
+    } catch (err) {
+      if (toast) toast.error(err.message);
+    }
+  },
+
+  async approveRequestCustom(id, name) {
+    const days = prompt("Сколько дней одобрить?", "30");
+    if (!days) return;
+    const toast = window.adminUI?.toastManager;
+    try {
+      await this.api("POST", `/extension-requests/${id}/approve`, { admin_telegram_id: 137981675, approved_days: parseInt(days) });
+      if (toast) toast.success(`Запрос ${name} одобрен (${days} дн.)`);
+      this.adminRequests();
+    } catch (err) {
+      if (toast) toast.error(err.message);
+    }
+  },
+
+  async denyRequest(id, name) {
+    const reason = prompt("Причина отклонения:", "Отклонено администратором");
+    if (reason === null) return;
+    const toast = window.adminUI?.toastManager;
+    try {
+      await this.api("POST", `/extension-requests/${id}/deny`, { admin_telegram_id: 137981675, reason });
+      if (toast) toast.success(`Запрос ${name} отклонён`);
+      this.adminRequests();
     } catch (err) {
       if (toast) toast.error(err.message);
     }
