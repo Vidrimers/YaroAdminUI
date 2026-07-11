@@ -274,13 +274,15 @@ const xrayCard = {
     body.innerHTML = '<p class="text-muted">Загрузка...</p>';
 
     try {
-      const [clientData, subData] = await Promise.all([
+      const [clientData, subData, trafficStats] = await Promise.all([
         this.api("GET", `/clients/${uuid}`),
         this.api("GET", `/clients/${uuid}/subscription`),
+        this.api("GET", `/stats/clients/${uuid}/traffic`).catch(() => null),
       ]);
 
       const c = clientData?.client || clientData;
       const sub = subData?.subscription || subData || {};
+      const stats = trafficStats?.traffic || {};
 
       title.textContent = `ℹ️ ${XrayModal._esc(c.name || c.email)}`;
 
@@ -293,6 +295,14 @@ const xrayCard = {
       const subStart = sub.subscription_start || c.subscription_start;
       const subEnd = sub.subscription_end || c.subscription_end;
 
+      // Calculate daily/weekly/monthly from stats
+      const daily = stats.daily_usage || [];
+      const todayGB = parseFloat(daily[daily.length - 1]?.gb || 0);
+      const weekGB = daily.slice(-7).reduce((s, d) => s + parseFloat(d.gb || 0), 0);
+      const monthGB = daily.reduce((s, d) => s + parseFloat(d.gb || 0), 0);
+      const totalGB = stats.stats?.total_gb || usedGB;
+      const resetDate = stats.reset_date || c.traffic_reset_date;
+
       body.innerHTML = `
         <div style="display: flex; flex-direction: column; gap: 12px">
           <div class="info-row"><span class="info-label">UUID:</span><span style="font-family: monospace; font-size: 0.85em; word-break: break-all">${XrayModal._esc(c.uuid)}</span></div>
@@ -300,10 +310,14 @@ const xrayCard = {
           <div class="info-row"><span class="info-label">Telegram ID:</span><span>${c.telegram_id || "N/A"}</span></div>
           <div class="info-row"><span class="info-label">Статус:</span><span style="color: ${statusColor}; font-weight: 600">${status}</span></div>
           <div class="info-row"><span class="info-label">Подписка:</span><span>${subStart ? new Date(subStart).toLocaleDateString("ru-RU") : "N/A"} → ${subEnd ? new Date(subEnd).toLocaleDateString("ru-RU") : "N/A"} <span style="color: ${daysLeft < 7 ? '#ff9800' : '#888'}">(${daysLeft} дн.)</span></span></div>
-          <div class="info-row"><span class="info-label">Трафик:</span><span>${usedGB} / ${limitGB} GB (${pct}%)</span></div>
+          <div class="info-row"><span class="info-label">За день:</span><span>${todayGB.toFixed(2)} GB</span></div>
+          <div class="info-row"><span class="info-label">За неделю:</span><span>${weekGB.toFixed(2)} GB</span></div>
+          <div class="info-row"><span class="info-label">За месяц:</span><span>${monthGB.toFixed(2)} / ${limitGB} GB (${limitGB > 0 ? (monthGB / limitGB * 100).toFixed(1) : 0}%)</span></div>
           <div style="height: 6px; background: rgba(255,255,255,0.1); border-radius: 3px; overflow: hidden">
-            <div style="height: 100%; width: ${Math.min(pct, 100)}%; background: ${pct > 90 ? '#f44336' : pct > 70 ? '#ff9800' : '#4caf50'}; border-radius: 3px"></div>
+            <div style="height: 100%; width: ${Math.min(limitGB > 0 ? (monthGB / limitGB * 100) : 0, 100)}%; background: ${monthGB / limitGB > 0.9 ? '#f44336' : monthGB / limitGB > 0.7 ? '#ff9800' : '#4caf50'}; border-radius: 3px"></div>
           </div>
+          <div class="info-row"><span class="info-label">Всего:</span><span>${totalGB} GB</span></div>
+          <div class="info-row"><span class="info-label">Сброс трафика:</span><span>${resetDate ? new Date(resetDate).toLocaleDateString("ru-RU") : "N/A"}</span></div>
           <div class="info-row"><span class="info-label">Устройства:</span><span>${c.max_devices || 2}</span></div>
           <div class="info-row"><span class="info-label">Предупреждения:</span><span>${c.warnings_count || 0} / 3</span></div>
         </div>`;
