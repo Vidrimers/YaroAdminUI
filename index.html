@@ -563,13 +563,14 @@
             <span id="xrayStatusBadge" class="text-muted" style="margin-left: auto; font-size: 0.85em">⏳ загрузка...</span>
           </div>
           <div class="card-body">
-            <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 15px">
-              <button class="btn btn-sm btn-info" onclick="xrayCard.checkStatus()">🔄 Статус</button>
-              <button class="btn btn-sm btn-success" onclick="xrayCard.serviceAction('start')">▶ Запустить</button>
-              <button class="btn btn-sm btn-warning" onclick="xrayCard.serviceAction('restart')">🔄 Перезапустить</button>
-              <button class="btn btn-sm btn-danger" onclick="xrayCard.serviceAction('stop')">⏹ Остановить</button>
-              <button class="btn btn-sm btn-secondary" onclick="xrayCard.showLogs()">📜 Логи</button>
-              <button class="btn btn-sm btn-primary" onclick="xrayCard.showAdminModal()" style="margin-left: auto">🔧 Управление</button>
+            <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; align-items: center">
+              <div style="display: flex; gap: 6px">
+                <button class="btn btn-sm btn-success" onclick="xrayCard.serviceAction('start')" title="Запустить">▶</button>
+                <button class="btn btn-sm btn-warning" onclick="xrayCard.serviceAction('restart')" title="Перезапустить">🔄</button>
+                <button class="btn btn-sm btn-danger" onclick="xrayCard.serviceAction('stop')" title="Остановить">⏹</button>
+              </div>
+              <button class="btn btn-sm btn-secondary" onclick="xrayCard.showLogs()" title="Логи">📜 Логи</button>
+              <button class="btn btn-sm btn-primary" onclick="xrayCard.showAdminModal()" style="margin-left: auto" title="Управление">🔧 Управление</button>
             </div>
             <div id="xrayClientsList" style="display: flex; flex-direction: column; gap: 8px">
               <p class="text-muted">Загрузка...</p>
