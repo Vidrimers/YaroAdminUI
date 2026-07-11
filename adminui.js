@@ -1977,6 +1977,20 @@ app.post("/api/favorite-commands/:id/move", verifyToken, async (req, res) => {
 // ==================== XRAY MANAGEMENT PROXY ====================
 const XRAY_API = "http://127.0.0.1:333";
 const XRAY_API_KEY = "REDACTED_VPN_API_KEY";
+const TG_BOT_TOKEN = "REDACTED_BOT_TOKEN";
+
+async function sendTelegramMessage(chatId, text) {
+  if (!chatId || !TG_BOT_TOKEN) return;
+  try {
+    await fetch(`https://api.telegram.org/bot${TG_BOT_TOKEN}/sendMessage`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chat_id: chatId, text, parse_mode: "HTML" }),
+    });
+  } catch (err) {
+    console.error("Telegram send failed:", err.message);
+  }
+}
 
 async function xrayAPI(method, path, body) {
   const opts = {
@@ -2134,8 +2148,24 @@ app.get("/api/xray/extension-requests", verifyToken, async (req, res) => {
 
 app.post("/api/xray/extension-requests/:id/approve", verifyToken, async (req, res) => {
   try {
+    // Get request details before approving (to have telegram_id and client info)
+    const requestInfo = await xrayAPI("GET", `/api/extension-requests/${req.params.id}`);
+    const request = requestInfo?.request || requestInfo;
+
     const data = await xrayAPI("POST", `/api/extension-requests/${req.params.id}/approve`, req.body);
     res.json(data);
+
+    // Send Telegram notification
+    if (request?.telegram_id) {
+      const days = req.body.approved_days || request.approved_days || request.requested_days || 30;
+      const clientName = request.client_name || "Unknown";
+      const msg =
+        `✅ <b>Твой запрос одобрен!</b>\n\n` +
+        `Клиент: <b>${clientName}</b>\n` +
+        `📅 Подписка продлена на ${days} дней.\n\n` +
+        `Используй /my_vpn для просмотра обновленной информации.`;
+      sendTelegramMessage(request.telegram_id, msg);
+    }
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
@@ -2143,8 +2173,23 @@ app.post("/api/xray/extension-requests/:id/approve", verifyToken, async (req, re
 
 app.post("/api/xray/extension-requests/:id/deny", verifyToken, async (req, res) => {
   try {
+    // Get request details before denying (to have telegram_id)
+    const requestInfo = await xrayAPI("GET", `/api/extension-requests/${req.params.id}`);
+    const request = requestInfo?.request || requestInfo;
+
     const data = await xrayAPI("POST", `/api/extension-requests/${req.params.id}/deny`, req.body);
     res.json(data);
+
+    // Send Telegram notification
+    if (request?.telegram_id) {
+      const reason = req.body.reason || "Без причины";
+      const msg =
+        `❌ <b>Заявка отклонена</b>\n\n` +
+        `К сожалению, администратор отклонил твою заявку на продление VPN.\n` +
+        `Причина: ${reason}\n\n` +
+        `Для уточнения обратись к администратору.`;
+      sendTelegramMessage(request.telegram_id, msg);
+    }
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
