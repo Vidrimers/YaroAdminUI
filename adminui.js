@@ -6,7 +6,7 @@ import sqlite3 from "sqlite3";
 import crypto from "crypto";
 import fs from "fs";
 import path from "path";
-import { execSync, exec } from "child_process";
+import { exec } from "child_process";
 import jwt from "jsonwebtoken";
 import { Client as SSHClient } from "ssh2";
 import os from "os";
@@ -2160,10 +2160,19 @@ app.get("/api/xray/subscription/:uuid", verifyToken, async (req, res) => {
 });
 
 // Xray service management (systemctl via SSH)
+function execAsync(cmd, timeout = 10000) {
+  return new Promise((resolve, reject) => {
+    exec(cmd, { timeout }, (err, stdout, stderr) => {
+      if (err) reject(err);
+      else resolve(stdout);
+    });
+  });
+}
+
 app.get("/api/xray/status", verifyToken, async (req, res) => {
   try {
-    const output = execSync("systemctl is-active xray", { timeout: 5000 }).toString().trim();
-    res.json({ success: true, active: output === "active", status: output });
+    const output = await execAsync("systemctl is-active xray", 5000);
+    res.json({ success: true, active: output.trim() === "active", status: output.trim() });
   } catch (err) {
     res.json({ success: true, active: false, status: "inactive" });
   }
@@ -2175,9 +2184,9 @@ app.post("/api/xray/service/:action", verifyToken, async (req, res) => {
     if (!["start", "stop", "restart"].includes(action)) {
       return res.status(400).json({ success: false, message: "Invalid action" });
     }
-    execSync(`systemctl ${action} xray`, { timeout: 15000 });
-    const status = execSync("systemctl is-active xray", { timeout: 5000 }).toString().trim();
-    res.json({ success: true, status });
+    // Send response immediately, do action async
+    res.json({ success: true, message: `${action} initiated` });
+    execAsync(`systemctl ${action} xray`, 15000).catch(() => {});
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
@@ -2185,7 +2194,7 @@ app.post("/api/xray/service/:action", verifyToken, async (req, res) => {
 
 app.get("/api/xray/logs", verifyToken, async (req, res) => {
   try {
-    const output = execSync("journalctl -u xray --no-pager -n 50 --output=short-iso", { timeout: 5000 }).toString();
+    const output = await execAsync("journalctl -u xray --no-pager -n 50 --output=short-iso", 5000);
     res.json({ success: true, logs: output });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -2197,7 +2206,7 @@ const XRAY_CONFIG = "/usr/local/etc/xray/config.json";
 
 app.get("/api/xray/warp-status", verifyToken, async (req, res) => {
   try {
-    const output = execSync("warp-cli status 2>/dev/null || echo 'not available'", { timeout: 5000 }).toString();
+    const output = await execAsync("warp-cli status 2>/dev/null || echo 'not available'", 5000);
     const connected = output.includes("Connected");
     res.json({ success: true, connected, status: output.trim() });
   } catch (err) {
