@@ -238,6 +238,8 @@ const xrayCard = {
     }
   },
 
+  _clientsData: [],
+
   async loadClients() {
     const list = document.getElementById("xrayClientsList");
     try {
@@ -249,23 +251,58 @@ const xrayCard = {
       const statsPromises = this.clients.map(c => this.api("GET", `/clients/${c.uuid}/traffic-stats`).catch(() => null));
       const statsResults = await Promise.all(statsPromises);
 
-      list.innerHTML = this.clients.map((c, i) => {
-        const monthGB = statsResults[i]?.stats?.month || 0;
-        const limitGB = c.traffic_limit_gb || 100;
-        const status = c.status || "active";
-        const statusIcon = status === "active" ? "🟢" : status === "blocked" ? "🔴" : "🟡";
-        const pct = limitGB > 0 ? Math.min((monthGB / limitGB) * 100, 100).toFixed(1) : 0;
-        return `
-          <div class="xray-client-row" onclick="xrayCard.showClientInfo('${c.uuid}')" style="display: flex; align-items: center; gap: 12px; padding: 10px 14px; background: rgba(255,255,255,0.04); border-radius: 8px; cursor: pointer; transition: background 0.2s">
-            <span>${statusIcon}</span>
-            <span style="flex: 1; font-weight: 500">${XrayModal._esc(c.name || c.email)}</span>
-            <span style="font-size: 0.85em; color: #888">${monthGB.toFixed(1)} / ${limitGB} GB (${pct}%)</span>
-            <span style="font-size: 1.1em" title="Подробнее">ℹ️</span>
-          </div>`;
-      }).join("");
+      // Merge stats into clients
+      this._clientsData = this.clients.map((c, i) => ({
+        ...c,
+        monthTraffic: statsResults[i]?.stats?.month || 0,
+      }));
+
+      // Restore sort preference
+      const sortSelect = document.getElementById("xraySortSelect");
+      const savedSort = localStorage.getItem("xraySort") || "name";
+      sortSelect.value = savedSort;
+
+      this._renderClients(savedSort);
     } catch (err) {
       list.innerHTML = `<p class="text-muted">Ошибка: ${err.message}</p>`;
     }
+  },
+
+  _renderClients(sortBy) {
+    const list = document.getElementById("xrayClientsList");
+    const countEl = document.getElementById("xrayClientsCount");
+    const sorted = [...this._clientsData];
+
+    if (sortBy === "name") sorted.sort((a, b) => (a.name || a.email || "").localeCompare(b.name || b.email || ""));
+    else if (sortBy === "traffic-desc") sorted.sort((a, b) => b.monthTraffic - a.monthTraffic);
+    else if (sortBy === "traffic-asc") sorted.sort((a, b) => a.monthTraffic - b.monthTraffic);
+    else if (sortBy === "status") {
+      const order = { blocked: 0, active: 1 };
+      sorted.sort((a, b) => (order[a.status] ?? 2) - (order[b.status] ?? 2));
+    }
+
+    countEl.textContent = `${sorted.length} клиентов`;
+
+    list.innerHTML = sorted.map((c) => {
+      const monthGB = c.monthTraffic;
+      const limitGB = c.traffic_limit_gb || 100;
+      const status = c.status || "active";
+      const statusIcon = status === "active" ? "🟢" : status === "blocked" ? "🔴" : "🟡";
+      const pct = limitGB > 0 ? Math.min((monthGB / limitGB) * 100, 100).toFixed(1) : 0;
+      return `
+        <div class="xray-client-row" onclick="xrayCard.showClientInfo('${c.uuid}')" style="display: flex; align-items: center; gap: 12px; padding: 10px 14px; background: rgba(255,255,255,0.04); border-radius: 8px; cursor: pointer; transition: background 0.2s">
+          <span>${statusIcon}</span>
+          <span style="flex: 1; font-weight: 500">${XrayModal._esc(c.name || c.email)}</span>
+          <span style="font-size: 0.85em; color: #888">${monthGB.toFixed(1)} / ${limitGB} GB (${pct}%)</span>
+          <span style="font-size: 1.1em" title="Подробнее">ℹ️</span>
+        </div>`;
+    }).join("");
+  },
+
+  sortClients(sortBy) {
+    localStorage.setItem("xraySort", sortBy);
+    this._renderClients(sortBy);
+  },
   },
 
   async showClientInfo(uuid) {

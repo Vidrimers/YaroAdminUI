@@ -572,6 +572,15 @@
               <button class="btn btn-sm btn-secondary" onclick="xrayCard.showLogs()" title="Логи">📜 Логи</button>
               <button class="btn btn-sm btn-primary" onclick="xrayCard.showAdminModal()" title="Управление">🔧 Управление</button>
             </div>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px">
+              <span id="xrayClientsCount" style="font-size: 0.85em; color: #888"></span>
+              <select id="xraySortSelect" onchange="xrayCard.sortClients(this.value)" style="padding: 4px 8px; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.15); border-radius: 4px; color: #e0e0e0; font-size: 0.85em">
+                <option value="name">По имени</option>
+                <option value="traffic-desc">Трафик ↓</option>
+                <option value="traffic-asc">Трафик ↑</option>
+                <option value="status">По статусу</option>
+              </select>
+            </div>
             <div id="xrayClientsList" style="display: flex; flex-direction: column; gap: 8px">
               <p class="text-muted">Загрузка...</p>
             </div>
