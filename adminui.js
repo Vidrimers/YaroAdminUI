@@ -6,7 +6,7 @@ import sqlite3 from "sqlite3";
 import crypto from "crypto";
 import fs from "fs";
 import path from "path";
-import { execSync } from "child_process";
+import { execSync, exec } from "child_process";
 import jwt from "jsonwebtoken";
 import { Client as SSHClient } from "ssh2";
 import os from "os";
@@ -2175,9 +2175,7 @@ app.post("/api/xray/service/:action", verifyToken, async (req, res) => {
     if (!["start", "stop", "restart"].includes(action)) {
       return res.status(400).json({ success: false, message: "Invalid action" });
     }
-    execSync(`systemctl ${action} xray`, { timeout: 10000 });
-    // Wait for status to settle
-    execSync("sleep 1", { timeout: 3000 });
+    execSync(`systemctl ${action} xray`, { timeout: 15000 });
     const status = execSync("systemctl is-active xray", { timeout: 5000 }).toString().trim();
     res.json({ success: true, status });
   } catch (err) {
@@ -2238,18 +2236,16 @@ app.post("/api/xray/warp-domains", verifyToken, async (req, res) => {
     fs.copyFileSync(XRAY_CONFIG, XRAY_CONFIG + ".bak");
     // Write
     fs.writeFileSync(XRAY_CONFIG, JSON.stringify(config, null, 2));
-    // Validate
-    try {
-      execSync("xray run -test -c " + XRAY_CONFIG, { timeout: 5000 });
-    } catch (e) {
-      // Restore from backup
-      fs.copyFileSync(XRAY_CONFIG + ".bak", XRAY_CONFIG);
-      return res.status(400).json({ success: false, message: "Config validation failed, restored from backup" });
-    }
-    // Restart
-    execSync("systemctl restart xray", { timeout: 10000 });
-
+    // Send response first, then restart in background
     res.json({ success: true, domains: warpRule.domain });
+
+    // Validate + restart async
+    exec("xray run -test -c " + XRAY_CONFIG + " && systemctl restart xray", { timeout: 15000 }, (err) => {
+      if (err) {
+        fs.copyFileSync(XRAY_CONFIG + ".bak", XRAY_CONFIG);
+        exec("systemctl restart xray", { timeout: 10000 });
+      }
+    });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
