@@ -567,6 +567,44 @@ const xrayCard = {
     }
   },
 
+  async adminSetTrafficLimitAll() {
+    if (!this.clients.length) { XrayModal.show("Лимит для всех", '<p class="text-muted">Нет клиентов</p>'); return; }
+
+    // Find default limit (most common among non-Admin clients)
+    const nonAdmin = this.clients.filter(c => (c.name || "").toLowerCase() !== "admin");
+    const limitCounts = {};
+    nonAdmin.forEach(c => { limitCounts[c.traffic_limit_gb] = (limitCounts[c.traffic_limit_gb] || 0) + 1; });
+    const defaultLimit = Object.entries(limitCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || 100;
+
+    // Show which clients have custom limits
+    const customClients = nonAdmin.filter(c => c.traffic_limit_gb != defaultLimit);
+    let msg = `Текущий лимит по умолчанию: ${defaultLimit} GB\n\n`;
+    if (customClients.length) {
+      msg += "Индивидуальные лимиты (не будут изменены):\n";
+      customClients.forEach(c => { msg += `  ${c.name}: ${c.traffic_limit_gb} GB\n`; });
+      msg += "\n";
+    }
+    msg += "Admin будет пропущен.\n\nВведите новый лимит для всех:";
+
+    const newLimit = await XrayModal.prompt("Лимит для всех (GB)", msg, String(defaultLimit));
+    if (!newLimit) return;
+
+    const toast = window.adminUI?.toastManager;
+    try {
+      let updated = 0;
+      for (const c of this.clients) {
+        if ((c.name || "").toLowerCase() === "admin") continue;
+        if (c.traffic_limit_gb != defaultLimit) continue;
+        await this.api("PUT", `/clients/${c.uuid}`, { traffic_limit_gb: parseInt(newLimit) });
+        updated++;
+      }
+      if (toast) toast.success(`Лимит изменён для ${updated} клиентов на ${newLimit} GB`);
+      await this.loadClients();
+    } catch (err) {
+      if (toast) toast.error(err.message);
+    }
+  },
+
   async adminBansWarnings() {
     const toast = window.adminUI?.toastManager;
     try {
