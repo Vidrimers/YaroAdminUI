@@ -1,3 +1,193 @@
+// ==================== CUSTOM MODAL SYSTEM ====================
+const XrayModal = {
+  _nextId: 0,
+
+  _esc(str) {
+    const d = document.createElement("div");
+    d.textContent = str;
+    return d.innerHTML;
+  },
+
+  // Generic modal: returns promise that resolves to button index clicked
+  show(title, bodyHtml, buttons = [{ text: "Закрыть", class: "btn-secondary" }]) {
+    return new Promise(resolve => {
+      const id = "xray-modal-" + (++this._nextId);
+      const existing = document.getElementById(id);
+      if (existing) existing.remove();
+
+      const overlay = document.createElement("div");
+      overlay.id = id;
+      overlay.className = "modal";
+      overlay.style.display = "flex";
+      overlay.innerHTML = `
+        <div class="modal-content" style="max-width: 500px">
+          <div class="modal-header">
+            <h2>${title}</h2>
+            <button class="modal-close" data-action="-1">&times;</button>
+          </div>
+          <div class="modal-body">${bodyHtml}</div>
+          <div class="modal-footer" style="flex-wrap: wrap; gap: 8px">
+            ${buttons.map((b, i) => `<button class="btn btn-sm ${b.class || 'btn-secondary'}" data-action="${i}">${b.text}</button>`).join("")}
+          </div>
+        </div>`;
+
+      document.body.appendChild(overlay);
+
+      const close = (actionIdx) => {
+        overlay.remove();
+        resolve(actionIdx);
+      };
+
+      overlay.addEventListener("click", (e) => {
+        const btn = e.target.closest("[data-action]");
+        if (btn) close(parseInt(btn.dataset.action));
+        else if (e.target === overlay) close(-1);
+      });
+    });
+  },
+
+  // Prompt: returns promise with input value or null
+  prompt(title, placeholder = "", defaultValue = "") {
+    return new Promise(resolve => {
+      const id = "xray-modal-" + (++this._nextId);
+      const existing = document.getElementById(id);
+      if (existing) existing.remove();
+
+      const overlay = document.createElement("div");
+      overlay.id = id;
+      overlay.className = "modal";
+      overlay.style.display = "flex";
+      overlay.innerHTML = `
+        <div class="modal-content" style="max-width: 420px">
+          <div class="modal-header">
+            <h2>${this._esc(title)}</h2>
+            <button class="modal-close" data-action="cancel">&times;</button>
+          </div>
+          <div class="modal-body">
+            <input type="text" id="${id}-input" value="${this._esc(defaultValue)}" placeholder="${this._esc(placeholder)}"
+              style="width: 100%; padding: 10px 14px; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.15); border-radius: 6px; color: #e0e0e0; font-size: 0.95em; box-sizing: border-box">
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-secondary btn-sm" data-action="cancel">Отмена</button>
+            <button class="btn btn-success btn-sm" data-action="ok">OK</button>
+          </div>
+        </div>`;
+
+      document.body.appendChild(overlay);
+
+      const input = document.getElementById(`${id}-input`);
+      input.focus();
+      input.select();
+
+      const close = (val) => {
+        overlay.remove();
+        resolve(val);
+      };
+
+      input.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") close(input.value);
+        if (e.key === "Escape") close(null);
+      });
+
+      overlay.addEventListener("click", (e) => {
+        const btn = e.target.closest("[data-action]");
+        if (btn) {
+          if (btn.dataset.action === "ok") close(input.value);
+          else close(null);
+        } else if (e.target === overlay) close(null);
+      });
+    });
+  },
+
+  // Confirm: returns promise with boolean
+  confirm(title, message = "") {
+    return this.show(title, message ? `<p>${this._esc(message)}</p>` : "", [
+      { text: "Отмена", class: "btn-secondary" },
+      { text: "Да", class: "btn-danger" },
+    ]).then(idx => idx === 1);
+  },
+
+  // Client picker with search: returns promise with client object or null
+  clientPicker(title, clients, extraAction = null) {
+    // extraAction: { text: "Продлить", callback: (client) => ... }
+    return new Promise(resolve => {
+      const id = "xray-modal-" + (++this._nextId);
+      const existing = document.getElementById(id);
+      if (existing) existing.remove();
+
+      const renderList = (filter = "") => {
+        const filtered = filter
+          ? clients.filter(c => (c.name || c.email || "").toLowerCase().includes(filter.toLowerCase()))
+          : clients;
+        if (!filtered.length) return '<p class="text-muted" style="padding: 10px 0">Нет результатов</p>';
+        return filtered.map(c => `
+          <div class="xray-picker-item" data-uuid="${c.uuid}" style="display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: rgba(255,255,255,0.04); border-radius: 6px; cursor: pointer; transition: background 0.15s">
+            <span style="flex: 1; font-weight: 500">${this._esc(c.name || c.email)}</span>
+            ${c.status === "blocked" ? '<span style="color: #f44336; font-size: 0.8em">🚫 blocked</span>' : ""}
+          </div>`).join("");
+      };
+
+      const overlay = document.createElement("div");
+      overlay.id = id;
+      overlay.className = "modal";
+      overlay.style.display = "flex";
+      overlay.innerHTML = `
+        <div class="modal-content" style="max-width: 450px">
+          <div class="modal-header">
+            <h2>${this._esc(title)}</h2>
+            <button class="modal-close" data-action="close">&times;</button>
+          </div>
+          <div class="modal-body">
+            <input type="text" id="${id}-search" placeholder="Поиск..."
+              style="width: 100%; padding: 10px 14px; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.15); border-radius: 6px; color: #e0e0e0; font-size: 0.95em; margin-bottom: 12px; box-sizing: border-box">
+            <div id="${id}-list" style="max-height: 350px; overflow-y: auto; display: flex; flex-direction: column; gap: 6px">
+              ${renderList()}
+            </div>
+          </div>
+        </div>`;
+
+      document.body.appendChild(overlay);
+
+      const searchInput = document.getElementById(`${id}-search`);
+      const listEl = document.getElementById(`${id}-list`);
+      searchInput.focus();
+
+      searchInput.addEventListener("input", () => {
+        listEl.innerHTML = renderList(searchInput.value);
+      });
+
+      const close = (val) => {
+        overlay.remove();
+        resolve(val);
+      };
+
+      overlay.addEventListener("click", (e) => {
+        if (e.target.closest("[data-action='close']") || e.target === overlay) {
+          close(null);
+          return;
+        }
+        const item = e.target.closest(".xray-picker-item");
+        if (item) {
+          const uuid = item.dataset.uuid;
+          const client = clients.find(c => c.uuid === uuid);
+          close(client);
+        }
+      });
+
+      searchInput.addEventListener("keydown", (e) => {
+        if (e.key === "Escape") close(null);
+        if (e.key === "Enter") {
+          const firstItem = listEl.querySelector(".xray-picker-item");
+          if (firstItem) {
+            const client = clients.find(c => c.uuid === firstItem.dataset.uuid);
+            close(client);
+          }
+        }
+      });
+    });
+  },
+};
+
 // ==================== XRAY CARD ====================
 const xrayCard = {
   clients: [],
@@ -56,7 +246,6 @@ const xrayCard = {
       this.clients = data.clients || [];
       if (!this.clients.length) { list.innerHTML = '<p class="text-muted">Нет клиентов</p>'; return; }
 
-      // Load traffic for each client
       const trafficPromises = this.clients.map(c => this.api("GET", `/clients/${c.uuid}/traffic-total`).catch(() => null));
       const trafficResults = await Promise.all(trafficPromises);
 
@@ -70,7 +259,7 @@ const xrayCard = {
         return `
           <div class="xray-client-row" onclick="xrayCard.showClientInfo('${c.uuid}')" style="display: flex; align-items: center; gap: 12px; padding: 10px 14px; background: rgba(255,255,255,0.04); border-radius: 8px; cursor: pointer; transition: background 0.2s">
             <span>${statusIcon}</span>
-            <span style="flex: 1; font-weight: 500">${this.esc(c.name || c.email)}</span>
+            <span style="flex: 1; font-weight: 500">${XrayModal._esc(c.name || c.email)}</span>
             <span style="font-size: 0.85em; color: #888">${usedGB.toFixed(1)} / ${limitGB} GB (${pct}%)</span>
             <span style="font-size: 1.1em" title="Подробнее">ℹ️</span>
           </div>`;
@@ -99,7 +288,7 @@ const xrayCard = {
       const tr = trafficData || {};
       const sub = subData || {};
 
-      title.textContent = `ℹ️ ${this.esc(c.name || c.email)}`;
+      title.textContent = `ℹ️ ${XrayModal._esc(c.name || c.email)}`;
 
       const usedGB = (tr.traffic_used_gb || 0).toFixed(2);
       const limitGB = tr.traffic_limit_gb || 100;
@@ -110,8 +299,8 @@ const xrayCard = {
 
       body.innerHTML = `
         <div style="display: flex; flex-direction: column; gap: 12px">
-          <div class="info-row"><span class="info-label">UUID:</span><span style="font-family: monospace; font-size: 0.85em; word-break: break-all">${this.esc(c.uuid)}</span></div>
-          <div class="info-row"><span class="info-label">Email:</span><span>${this.esc(c.email || "N/A")}</span></div>
+          <div class="info-row"><span class="info-label">UUID:</span><span style="font-family: monospace; font-size: 0.85em; word-break: break-all">${XrayModal._esc(c.uuid)}</span></div>
+          <div class="info-row"><span class="info-label">Email:</span><span>${XrayModal._esc(c.email || "N/A")}</span></div>
           <div class="info-row"><span class="info-label">Telegram ID:</span><span>${c.telegram_id || "N/A"}</span></div>
           <div class="info-row"><span class="info-label">Статус:</span><span style="color: ${statusColor}; font-weight: 600">${status}</span></div>
           <div class="info-row"><span class="info-label">Подписка:</span><span>${sub.subscription_start ? new Date(sub.subscription_start).toLocaleDateString("ru-RU") : "N/A"} → ${sub.subscription_end ? new Date(sub.subscription_end).toLocaleDateString("ru-RU") : "N/A"} <span style="color: ${daysLeft < 7 ? '#ff9800' : '#888'}">(${daysLeft} дн.)</span></span></div>
@@ -123,7 +312,6 @@ const xrayCard = {
           <div class="info-row"><span class="info-label">Предупреждения:</span><span>${c.warnings_count || 0} / 3</span></div>
         </div>`;
 
-      // Build action buttons
       const btns = [];
       if (status === "blocked") {
         btns.push(`<button class="btn btn-sm btn-success" onclick="xrayCard.clientAction('${uuid}','unblock')">🔓 Разблокировать</button>`);
@@ -154,25 +342,25 @@ const xrayCard = {
   },
 
   async clientBlock(uuid) {
-    const reason = prompt("Причина блокировки:");
+    const reason = await XrayModal.prompt("Причина блокировки", "Введите причину");
     if (reason === null) return;
     await this.clientAction(uuid, "block", { reason });
   },
 
   async clientWarn(uuid) {
-    const reason = prompt("Причина предупреждения:");
+    const reason = await XrayModal.prompt("Причина предупреждения", "Введите причину");
     if (reason === null) return;
     await this.clientAction(uuid, "warn", { reason });
   },
 
   async clientExtend(uuid) {
-    const days = prompt("Дней для продления (7, 14, 30, 60, 90, 180, 365):", "30");
+    const days = await XrayModal.prompt("Дней для продления", "7, 14, 30, 60, 90, 180, 365", "30");
     if (!days) return;
     await this.clientAction(uuid, "extend", { days: parseInt(days) });
   },
 
   async clientResetTraffic(uuid) {
-    if (!confirm("Сбросить трафик?")) return;
+    if (!await XrayModal.confirm("Сбросить трафик?", "Трафик будет обнулён для этого клиента.")) return;
     const toast = window.adminUI?.toastManager;
     try {
       await this.api("POST", `/stats/clients/${uuid}/reset`);
@@ -195,7 +383,7 @@ const xrayCard = {
       body.innerHTML += `
         <div style="margin-top: 15px">
           <label style="font-weight: 500; display: block; margin-bottom: 5px">Ссылка подключения:</label>
-          <textarea readonly style="width: 100%; height: 80px; background: rgba(0,0,0,0.3); color: #4caf50; border: 1px solid rgba(255,255,255,0.15); border-radius: 6px; padding: 10px; font-family: monospace; font-size: 0.8em; resize: vertical">${this.esc(text)}</textarea>
+          <textarea readonly style="width: 100%; height: 80px; background: rgba(0,0,0,0.3); color: #4caf50; border: 1px solid rgba(255,255,255,0.15); border-radius: 6px; padding: 10px; font-family: monospace; font-size: 0.8em; resize: vertical">${XrayModal._esc(text)}</textarea>
           <button class="btn btn-sm btn-success" style="margin-top: 8px" onclick="navigator.clipboard.writeText(this.previousElementSibling.value); window.adminUI?.toastManager?.success('Скопировано!')">📋 Копировать</button>
         </div>`;
     } catch (err) {
@@ -214,13 +402,15 @@ const xrayCard = {
   },
 
   async adminAddClient() {
-    const name = prompt("Имя клиента:");
+    const name = await XrayModal.prompt("Имя клиента", "Введите имя");
     if (!name) return;
-    const telegramId = prompt("Telegram ID (или 0):", "0");
-    const days = prompt("Дней подписки:", "30");
+    const telegramId = await XrayModal.prompt("Telegram ID", "0 или ID пользователя", "0");
+    if (telegramId === null) return;
+    const days = await XrayModal.prompt("Дней подписки", "Количество дней", "30");
+    if (!days) return;
     const toast = window.adminUI?.toastManager;
     try {
-      const data = await this.api("POST", "/clients", {
+      await this.api("POST", "/clients", {
         name, telegram_id: parseInt(telegramId) || 0, subscription_days: parseInt(days) || 30
       });
       if (toast) toast.success(`Клиент ${name} добавлен`);
@@ -231,16 +421,14 @@ const xrayCard = {
   },
 
   async adminRemoveClient() {
-    if (!this.clients.length) return alert("Нет клиентов");
-    const list = this.clients.map((c, i) => `${i + 1}. ${c.name || c.email}`).join("\n");
-    const idx = prompt(`Выберите номер клиента:\n${list}`);
-    if (!idx) return;
-    const c = this.clients[parseInt(idx) - 1];
-    if (!c || !confirm(`Удалить ${c.name || c.email}?`)) return;
+    if (!this.clients.length) { XrayModal.show("Удаление клиента", '<p class="text-muted">Нет клиентов</p>'); return; }
+    const client = await XrayModal.clientPicker("Выберите клиента для удаления", this.clients);
+    if (!client) return;
+    if (!await XrayModal.confirm("Удалить клиента?", `${client.name || client.email} будет удалён навсегда.`)) return;
     const toast = window.adminUI?.toastManager;
     try {
-      await this.api("DELETE", `/clients/${c.uuid}`);
-      if (toast) toast.success(`Клиент ${c.name} удалён`);
+      await this.api("DELETE", `/clients/${client.uuid}`);
+      if (toast) toast.success(`Клиент ${client.name} удалён`);
       await this.loadClients();
     } catch (err) {
       if (toast) toast.error(err.message);
@@ -248,17 +436,14 @@ const xrayCard = {
   },
 
   async adminRenameClient() {
-    if (!this.clients.length) return alert("Нет клиентов");
-    const list = this.clients.map((c, i) => `${i + 1}. ${c.name || c.email}`).join("\n");
-    const idx = prompt(`Выберите номер клиента:\n${list}`);
-    if (!idx) return;
-    const c = this.clients[parseInt(idx) - 1];
-    if (!c) return;
-    const newName = prompt(`Новое имя для ${c.name}:`, c.name);
-    if (!newName || newName === c.name) return;
+    if (!this.clients.length) { XrayModal.show("Переименование", '<p class="text-muted">Нет клиентов</p>'); return; }
+    const client = await XrayModal.clientPicker("Выберите клиента для переименования", this.clients);
+    if (!client) return;
+    const newName = await XrayModal.prompt("Новое имя", "", client.name || "");
+    if (!newName || newName === client.name) return;
     const toast = window.adminUI?.toastManager;
     try {
-      await this.api("PUT", `/clients/${c.uuid}`, { name: newName });
+      await this.api("PUT", `/clients/${client.uuid}`, { name: newName });
       if (toast) toast.success("Переименован");
       await this.loadClients();
     } catch (err) {
@@ -267,17 +452,14 @@ const xrayCard = {
   },
 
   async adminExtendClient() {
-    if (!this.clients.length) return alert("Нет клиентов");
-    const list = this.clients.map((c, i) => `${i + 1}. ${c.name || c.email}`).join("\n");
-    const idx = prompt(`Выберите номер клиента:\n${list}`);
-    if (!idx) return;
-    const c = this.clients[parseInt(idx) - 1];
-    if (!c) return;
-    const days = prompt("Дней для продления:", "30");
+    if (!this.clients.length) { XrayModal.show("Продление", '<p class="text-muted">Нет клиентов</p>'); return; }
+    const client = await XrayModal.clientPicker("Выберите клиента для продления", this.clients);
+    if (!client) return;
+    const days = await XrayModal.prompt("Дней для продления", "Количество дней", "30");
     if (!days) return;
     const toast = window.adminUI?.toastManager;
     try {
-      await this.api("POST", `/clients/${c.uuid}/extend`, { days: parseInt(days) });
+      await this.api("POST", `/clients/${client.uuid}/extend`, { days: parseInt(days) });
       if (toast) toast.success("Продлено");
     } catch (err) {
       if (toast) toast.error(err.message);
@@ -292,7 +474,7 @@ const xrayCard = {
       if (!blocked.length) { this.adminResult('<p class="text-muted">Нет заблокированных или предупреждённых клиентов</p>'); return; }
       this.adminResult(blocked.map(c => `
         <div style="padding: 8px; background: rgba(255,255,255,0.04); border-radius: 6px; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center">
-          <span>${c.status === "blocked" ? "🚫" : "⚠️"} ${this.esc(c.name)} — ${c.status} (${c.warnings_count}/3)</span>
+          <span>${c.status === "blocked" ? "🚫" : "⚠️"} ${XrayModal._esc(c.name)} — ${c.status} (${c.warnings_count}/3)</span>
           ${c.status === "blocked" ? `<button class="btn btn-sm btn-success" onclick="xrayCard.clientAction('${c.uuid}','unblock')">Разблокировать</button>` : ""}
         </div>`).join(""));
     } catch (err) {
@@ -301,8 +483,6 @@ const xrayCard = {
   },
 
   async adminCheckSubscriptions() {
-    this.adminResult('<p class="text-muted">Проверка подписок... (выполняется на сервере)</p>');
-    // This would need a server-side endpoint to run subscription-checker.js
     this.adminResult('<p class="text-muted">⚠️ Проверка подписок доступна через Telegram бот</p>');
   },
 
@@ -340,15 +520,15 @@ const xrayCard = {
           <div style="padding: 10px; background: rgba(255,152,0,0.08); border: 1px solid rgba(255,152,0,0.2); border-radius: 8px; margin-bottom: 8px">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px">
               <div>
-                <strong>${this.esc(r.client_name || "Unknown")}</strong>
+                <strong>${XrayModal._esc(r.client_name || "Unknown")}</strong>
                 <span style="color: #888; font-size: 0.85em; margin-left: 8px">${r.requested_days || r.requested_months * 30} дн.</span>
               </div>
               <span style="color: #888; font-size: 0.8em">${new Date(r.created_at).toLocaleDateString("ru-RU")}</span>
             </div>
             <div style="display: flex; gap: 6px">
-              <button class="btn btn-sm btn-success" onclick="xrayCard.approveRequest('${r.id}', '${this.esc(r.client_name)}')">✅ Одобрить</button>
-              <button class="btn btn-sm btn-secondary" onclick="xrayCard.approveRequestCustom('${r.id}', '${this.esc(r.client_name)}')">📅 Свой срок</button>
-              <button class="btn btn-sm btn-danger" onclick="xrayCard.denyRequest('${r.id}', '${this.esc(r.client_name)}')">❌ Отклонить</button>
+              <button class="btn btn-sm btn-success" onclick="xrayCard.approveRequest('${r.id}', '${XrayModal._esc(r.client_name)}')">✅ Одобрить</button>
+              <button class="btn btn-sm btn-secondary" onclick="xrayCard.approveRequestCustom('${r.id}', '${XrayModal._esc(r.client_name)}')">📅 Свой срок</button>
+              <button class="btn btn-sm btn-danger" onclick="xrayCard.denyRequest('${r.id}', '${XrayModal._esc(r.client_name)}')">❌ Отклонить</button>
             </div>
           </div>`).join("");
       } else {
@@ -359,7 +539,7 @@ const xrayCard = {
         html += '<h3 style="font-size: 1em; margin: 15px 0 10px; color: #4caf50">✅ Одобренные (последние 5)</h3>';
         html += approved.slice(0, 5).map(r => `
           <div style="padding: 8px 12px; background: rgba(76,175,80,0.06); border-radius: 6px; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center">
-            <span>${this.esc(r.client_name || "Unknown")} — ${r.approved_days || r.requested_days} дн.</span>
+            <span>${XrayModal._esc(r.client_name || "Unknown")} — ${r.approved_days || r.requested_days} дн.</span>
             <span style="color: #888; font-size: 0.8em">${new Date(r.processed_at).toLocaleDateString("ru-RU")}</span>
           </div>`).join("");
       }
@@ -368,7 +548,7 @@ const xrayCard = {
         html += '<h3 style="font-size: 1em; margin: 15px 0 10px; color: #f44336">❌ Отклонённые (последние 5)</h3>';
         html += denied.slice(0, 5).map(r => `
           <div style="padding: 8px 12px; background: rgba(244,67,54,0.06); border-radius: 6px; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center">
-            <span>${this.esc(r.client_name || "Unknown")} — ${r.denial_reason || "Без причины"}</span>
+            <span>${XrayModal._esc(r.client_name || "Unknown")} — ${r.denial_reason || "Без причины"}</span>
             <span style="color: #888; font-size: 0.8em">${new Date(r.processed_at).toLocaleDateString("ru-RU")}</span>
           </div>`).join("");
       }
@@ -380,7 +560,7 @@ const xrayCard = {
   },
 
   async approveRequest(id, name) {
-    if (!confirm(`Одобрить запрос от ${name}?`)) return;
+    if (!await XrayModal.confirm("Одобрить запрос?", `Запрос от ${name}`)) return;
     const toast = window.adminUI?.toastManager;
     try {
       await this.api("POST", `/extension-requests/${id}/approve`, { admin_telegram_id: 137981675 });
@@ -392,7 +572,7 @@ const xrayCard = {
   },
 
   async approveRequestCustom(id, name) {
-    const days = prompt("Сколько дней одобрить?", "30");
+    const days = await XrayModal.prompt("Сколько дней одобрить?", "Количество дней", "30");
     if (!days) return;
     const toast = window.adminUI?.toastManager;
     try {
@@ -405,7 +585,7 @@ const xrayCard = {
   },
 
   async denyRequest(id, name) {
-    const reason = prompt("Причина отклонения:", "Отклонено администратором");
+    const reason = await XrayModal.prompt("Причина отклонения", "", "Отклонено администратором");
     if (reason === null) return;
     const toast = window.adminUI?.toastManager;
     try {
@@ -429,12 +609,6 @@ const xrayCard = {
       content.textContent = "Ошибка: " + err.message;
     }
   },
-
-  esc(str) {
-    const d = document.createElement("div");
-    d.textContent = str;
-    return d.innerHTML;
-  }
 };
 
 // ==================== WARP CARD ====================
@@ -482,8 +656,8 @@ const warpCard = {
       if (!domains.length) { list.innerHTML = '<p class="text-muted">Нет доменов в WARP</p>'; return; }
       list.innerHTML = domains.map(d => `
         <div style="display: flex; align-items: center; gap: 10px; padding: 8px 12px; background: rgba(255,255,255,0.04); border-radius: 6px">
-          <span style="flex: 1">${this.esc(d)}</span>
-          <button class="btn btn-sm btn-danger" onclick="warpCard.removeDomain('${this.esc(d)}')">❌</button>
+          <span style="flex: 1">${XrayModal._esc(d)}</span>
+          <button class="btn btn-sm btn-danger" onclick="warpCard.removeDomain('${XrayModal._esc(d)}')">❌</button>
         </div>`).join("");
     } catch (err) {
       list.innerHTML = `<p class="text-muted">Ошибка: ${err.message}</p>`;
@@ -506,7 +680,7 @@ const warpCard = {
   },
 
   async removeDomain(domain) {
-    if (!confirm(`Удалить ${domain} из WARP?`)) return;
+    if (!await XrayModal.confirm("Удалить домен?", `${domain} будет удалён из WARP маршрутизации.`)) return;
     const toast = window.adminUI?.toastManager;
     try {
       await this.api("POST", "/warp-domains", { domain, action: "remove" });
@@ -516,20 +690,12 @@ const warpCard = {
       if (toast) toast.error(err.message);
     }
   },
-
-  esc(str) {
-    const d = document.createElement("div");
-    d.textContent = str;
-    return d.innerHTML;
-  }
 };
 
 // ==================== INIT ====================
-// Hook into the existing dashboard lifecycle
 const _origShowDashboard = UIController.prototype.showDashboard;
 UIController.prototype.showDashboard = function() {
   _origShowDashboard.call(this);
-  // Init Xray and WARP cards after dashboard loads
   setTimeout(() => {
     xrayCard.init();
     warpCard.init();
