@@ -42,13 +42,19 @@ class DB {
       }
     );
     this.db.run(`CREATE TABLE IF NOT EXISTS user_settings (
-      id INTEGER PRIMARY KEY, 
+      id INTEGER PRIMARY KEY,
       username TEXT UNIQUE,
       card_layouts TEXT,
       card_heights TEXT,
+      hidden_cards TEXT DEFAULT '{}',
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY(username) REFERENCES users(username)
     )`);
+    // Migration: add hidden_cards column if it doesn't exist
+    this.db.run(
+      `ALTER TABLE user_settings ADD COLUMN hidden_cards TEXT DEFAULT '{}'`,
+      () => {}
+    );
     this.db.run(`CREATE TABLE IF NOT EXISTS favorite_commands (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       username TEXT NOT NULL,
@@ -105,7 +111,7 @@ class DB {
   getUserSettings(username) {
     return new Promise((resolve, reject) => {
       this.db.get(
-        "SELECT card_layouts, card_heights FROM user_settings WHERE username = ?",
+        "SELECT card_layouts, card_heights, hidden_cards FROM user_settings WHERE username = ?",
         [username],
         (err, row) => {
           if (err) reject(err);
@@ -113,25 +119,27 @@ class DB {
             resolve({
               cardLayouts: row.card_layouts ? JSON.parse(row.card_layouts) : {},
               cardHeights: row.card_heights ? JSON.parse(row.card_heights) : {},
+              hiddenCards: row.hidden_cards ? JSON.parse(row.hidden_cards) : {},
             });
           } else {
-            resolve({ cardLayouts: {}, cardHeights: {} });
+            resolve({ cardLayouts: {}, cardHeights: {}, hiddenCards: {} });
           }
         }
       );
     });
   }
 
-  saveUserSettings(username, cardLayouts, cardHeights) {
+  saveUserSettings(username, cardLayouts, cardHeights, hiddenCards) {
     return new Promise((resolve, reject) => {
       this.db.run(
-        `INSERT INTO user_settings (username, card_layouts, card_heights, updated_at) 
-         VALUES (?, ?, ?, CURRENT_TIMESTAMP)
-         ON CONFLICT(username) DO UPDATE SET 
-         card_layouts=excluded.card_layouts, 
+        `INSERT INTO user_settings (username, card_layouts, card_heights, hidden_cards, updated_at)
+         VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+         ON CONFLICT(username) DO UPDATE SET
+         card_layouts=excluded.card_layouts,
          card_heights=excluded.card_heights,
+         hidden_cards=excluded.hidden_cards,
          updated_at=CURRENT_TIMESTAMP`,
-        [username, JSON.stringify(cardLayouts), JSON.stringify(cardHeights)],
+        [username, JSON.stringify(cardLayouts), JSON.stringify(cardHeights), JSON.stringify(hiddenCards || {})],
         function (err) {
           err ? reject(err) : resolve({ id: this.lastID });
         }
@@ -443,8 +451,9 @@ app.post("/api/auth/ssh-verify", async (req, res) => {
     // Full verification would require ssh-keygen command
     const username = "admin";
     await db.addUser(username);
-    const token = jwt.sign({ username }, JWT_SECRET, { expiresIn: "24h" });
-    res.json({ token, username });
+    const device = { name: req.headers["user-agent"] || "Unknown", ip: req.ip || req.connection?.remoteAddress || "Unknown" };
+    const token = jwt.sign({ username, device }, JWT_SECRET, { expiresIn: "24h" });
+    res.json({ token, username, device });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
@@ -454,8 +463,9 @@ app.post("/api/auth/telegram-verify", async (req, res) => {
   try {
     const { code } = req.body;
     const username = "admin";
-    const token = jwt.sign({ username }, JWT_SECRET, { expiresIn: "24h" });
-    res.json({ token, username });
+    const device = { name: req.headers["user-agent"] || "Unknown", ip: req.ip || req.connection?.remoteAddress || "Unknown" };
+    const token = jwt.sign({ username, device }, JWT_SECRET, { expiresIn: "24h" });
+    res.json({ token, username, device });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
@@ -522,8 +532,9 @@ app.post("/api/auth/webauthn-verify", async (req, res) => {
     // For now, accept any valid WebAuthn assertion
     // In production, verify the assertion against stored credentials
     await db.addUser(username);
-    const token = jwt.sign({ username }, JWT_SECRET, { expiresIn: "24h" });
-    res.json({ token, username });
+    const device = { name: req.headers["user-agent"] || "Unknown", ip: req.ip || req.connection?.remoteAddress || "Unknown" };
+    const token = jwt.sign({ username, device }, JWT_SECRET, { expiresIn: "24h" });
+    res.json({ token, username, device });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
@@ -1859,6 +1870,7 @@ app.get("/api/user/settings", verifyToken, async (req, res) => {
       success: true,
       cardLayouts: settings.cardLayouts,
       cardHeights: settings.cardHeights,
+      hiddenCards: settings.hiddenCards,
     });
   } catch (error) {
     res.status(500).json({
@@ -1870,7 +1882,7 @@ app.get("/api/user/settings", verifyToken, async (req, res) => {
 
 app.post("/api/user/settings", verifyToken, async (req, res) => {
   try {
-    const { cardLayouts, cardHeights } = req.body;
+    const { cardLayouts, cardHeights, hiddenCards } = req.body;
 
     if (!cardLayouts || !cardHeights) {
       return res.status(400).json({
@@ -1879,7 +1891,7 @@ app.post("/api/user/settings", verifyToken, async (req, res) => {
       });
     }
 
-    await db.saveUserSettings(req.user.username, cardLayouts, cardHeights);
+    await db.saveUserSettings(req.user.username, cardLayouts, cardHeights, hiddenCards);
 
     // Log the action
     await db.addActivityLog(

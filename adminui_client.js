@@ -3,6 +3,7 @@ class AuthManager {
   constructor() {
     this.token = localStorage.getItem("admin_token");
     this.username = localStorage.getItem("admin_username");
+    this.device = JSON.parse(localStorage.getItem("admin_device") || "null");
     this.authMethods = ["ssh-auth", "webauthn-auth", "telegram-auth"];
     this.currentTab = "ssh-auth";
   }
@@ -11,18 +12,22 @@ class AuthManager {
     return !!this.token;
   }
 
-  setAuth(token, username) {
+  setAuth(token, username, device) {
     this.token = token;
     this.username = username;
+    this.device = device || null;
     localStorage.setItem("admin_token", token);
     localStorage.setItem("admin_username", username);
+    if (device) localStorage.setItem("admin_device", JSON.stringify(device));
   }
 
   clear() {
     this.token = null;
     this.username = null;
+    this.device = null;
     localStorage.removeItem("admin_token");
     localStorage.removeItem("admin_username");
+    localStorage.removeItem("admin_device");
   }
 }
 
@@ -310,7 +315,7 @@ class UIController {
 
       try {
         const response = await this.api.verifySSH(message, signature);
-        this.auth.setAuth(response.token, response.username);
+        this.auth.setAuth(response.token, response.username, response.device);
         this.showDashboard();
         this.toast.success("Успешный вход!");
       } catch (error) {
@@ -390,7 +395,7 @@ class UIController {
         );
 
         // Use the token from server response
-        this.auth.setAuth(response.token, response.username);
+        this.auth.setAuth(response.token, response.username, response.device);
         this.showDashboard();
         this.toast.success("WebAuthn вход успешен!");
       } catch (error) {
@@ -413,7 +418,7 @@ class UIController {
 
       try {
         const response = await this.api.verifyTelegramCode(code);
-        this.auth.setAuth(response.token, response.username);
+        this.auth.setAuth(response.token, response.username, response.device);
         this.showDashboard();
         this.toast.success("Успешный вход через Telegram!");
       } catch (error) {
@@ -1382,6 +1387,13 @@ class UIController {
     this.authScreen.style.display = "none";
     this.dashboard.style.display = "block";
     document.getElementById("username").textContent = this.auth.username;
+    // Show device info
+    const deviceInfoEl = document.getElementById("deviceInfo");
+    if (deviceInfoEl && this.auth.device) {
+      const d = this.auth.device;
+      const shortUA = (d.name || "").replace(/\s*\(.*?\)\s*/g, " ").trim().split(/\s+/).slice(0, 2).join(" ");
+      deviceInfoEl.textContent = `(${shortUA}${d.ip ? ", " + d.ip : ""})`;
+    }
     // Load dashboard data after showing dashboard
     this.loadDashboardData();
     this.startDataRefresh();
@@ -1469,6 +1481,7 @@ class UIController {
     const sortableList = document.getElementById("sortableList");
     const container = document.getElementById("cardsContainer");
     const cards = Array.from(container.querySelectorAll(".card"));
+    const hiddenCards = JSON.parse(localStorage.getItem("hiddenCards") || "{}");
 
     // Clear list
     sortableList.innerHTML = "";
@@ -1476,14 +1489,33 @@ class UIController {
     // Add cards to sortable list
     cards.forEach((card, index) => {
       const title = card.querySelector("h2")?.textContent || `Card ${index + 1}`;
+      const isHidden = !!hiddenCards[title];
       const item = document.createElement("div");
-      item.className = "sortable-item";
+      item.className = "sortable-item" + (isHidden ? " card-hidden" : "");
       item.draggable = true;
       item.dataset.title = title;
       item.innerHTML = `
         <span class="sortable-handle">☰</span>
         <span class="sortable-title">${title}</span>
+        <button class="visibility-toggle${isHidden ? " hidden" : ""}" title="Показать/скрыть карточку">${isHidden ? "🚫" : "👁"}</button>
       `;
+
+      // Eye toggle handler
+      const toggleBtn = item.querySelector(".visibility-toggle");
+      toggleBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const currentHidden = JSON.parse(localStorage.getItem("hiddenCards") || "{}");
+        const nowHidden = !currentHidden[title];
+        if (nowHidden) {
+          currentHidden[title] = true;
+        } else {
+          delete currentHidden[title];
+        }
+        localStorage.setItem("hiddenCards", JSON.stringify(currentHidden));
+        toggleBtn.textContent = nowHidden ? "🚫" : "👁";
+        toggleBtn.classList.toggle("hidden", nowHidden);
+        item.classList.toggle("card-hidden", nowHidden);
+      });
 
       sortableList.appendChild(item);
     });
@@ -1552,9 +1584,10 @@ class UIController {
     // Save to localStorage
     localStorage.setItem("cardLayout", JSON.stringify(layout));
 
-    // Apply new order to actual cards
+    // Apply new order and visibility to actual cards
     const container = document.getElementById("cardsContainer");
     const cards = Array.from(container.querySelectorAll(".card"));
+    const hiddenCards = JSON.parse(localStorage.getItem("hiddenCards") || "{}");
 
     // Create a map of cards by their titles
     const cardMap = {};
@@ -1567,6 +1600,7 @@ class UIController {
     layout.forEach((title) => {
       if (cardMap[title]) {
         container.appendChild(cardMap[title]);
+        cardMap[title].style.display = hiddenCards[title] ? "none" : "";
       }
     });
 
@@ -1589,11 +1623,24 @@ class UIController {
 
   restoreCardLayout() {
     const savedLayout = localStorage.getItem("cardLayout");
+    const hiddenCards = JSON.parse(localStorage.getItem("hiddenCards") || "{}");
+
+    // Apply hidden cards even if no layout saved
+    const container = document.getElementById("cardsContainer");
+    if (container) {
+      const cards = Array.from(container.querySelectorAll(".card"));
+      cards.forEach((card) => {
+        const title = card.querySelector("h2")?.textContent || "Unknown";
+        if (hiddenCards[title]) {
+          card.style.display = "none";
+        }
+      });
+    }
+
     if (!savedLayout) return;
 
     try {
       const layout = JSON.parse(savedLayout);
-      const container = document.getElementById("cardsContainer");
       const cards = Array.from(container.querySelectorAll(".card"));
 
       // Create a map of cards by their titles
@@ -2217,6 +2264,7 @@ class UIController {
       const cardHeights = JSON.parse(
         localStorage.getItem("cardHeights") || "{}"
       );
+      const hiddenCards = JSON.parse(localStorage.getItem("hiddenCards") || "{}");
 
       const response = await fetch("/api/user/settings", {
         method: "POST",
@@ -2227,6 +2275,7 @@ class UIController {
         body: JSON.stringify({
           cardLayouts: cardLayout,
           cardHeights: cardHeights,
+          hiddenCards: hiddenCards,
         }),
       });
 
@@ -2265,6 +2314,10 @@ class UIController {
         if (Object.keys(data.cardHeights).length > 0) {
           localStorage.setItem("cardHeights", JSON.stringify(data.cardHeights));
           console.log("Card heights loaded from database:", data.cardHeights);
+        }
+        if (data.hiddenCards && Object.keys(data.hiddenCards).length > 0) {
+          localStorage.setItem("hiddenCards", JSON.stringify(data.hiddenCards));
+          console.log("Hidden cards loaded from database:", data.hiddenCards);
         }
       }
     } catch (error) {
@@ -2650,6 +2703,10 @@ class UIController {
 
 // ==================== INITIALIZATION ====================
 document.addEventListener("DOMContentLoaded", () => {
+  // Apply saved theme immediately to prevent flash
+  const savedTheme = localStorage.getItem("selectedTheme") || "default";
+  document.body.classList.add("theme-" + savedTheme);
+
   const authManager = new AuthManager();
   const toastManager = new ToastManager();
   const apiService = new APIService(authManager);

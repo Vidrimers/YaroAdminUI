@@ -1567,6 +1567,28 @@ body.theme-cyberpunk .card-header h2 {
   font-size: 1.1em;
 }
 
+.visibility-toggle {
+  background: none;
+  border: none;
+  font-size: 1.2em;
+  cursor: pointer;
+  opacity: 0.7;
+  transition: opacity 0.2s;
+  padding: 2px 6px;
+}
+
+.visibility-toggle:hover {
+  opacity: 1;
+}
+
+.visibility-toggle.hidden {
+  opacity: 0.4;
+}
+
+.sortable-item.card-hidden {
+  opacity: 0.5;
+}
+
 
 /* ==================== TERMINAL ==================== */
 .terminal-output {
