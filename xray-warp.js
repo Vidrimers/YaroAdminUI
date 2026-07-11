@@ -375,6 +375,7 @@ const xrayCard = {
       btns.push(`<button class="btn btn-sm btn-secondary" onclick="xrayCard.clientWarn('${uuid}')">⚠️ Предупреждение</button>`);
       btns.push(`<button class="btn btn-sm btn-secondary" onclick="xrayCard.clientAction('${uuid}','reset-warnings')">🔄 Сброс предупр.</button>`);
       btns.push(`<button class="btn btn-sm btn-secondary" onclick="xrayCard.clientResetTraffic('${uuid}')">📊 Сброс трафика</button>`);
+      btns.push(`<button class="btn btn-sm btn-info" onclick="xrayCard.clientSetTrafficLimit('${uuid}', ${limitGB})">📶 Лимит</button>`);
       footer.innerHTML = btns.join("") + `<button class="btn btn-secondary" onclick="document.getElementById('xrayClientModal').style.display='none'">Закрыть</button>`;
     } catch (err) {
       body.innerHTML = `<p class="text-muted">Ошибка: ${err.message}</p>`;
@@ -417,6 +418,20 @@ const xrayCard = {
     try {
       await this.api("POST", `/stats/clients/${uuid}/reset`);
       if (toast) toast.success("Трафик сброшен");
+      this.showClientInfo(uuid);
+    } catch (err) {
+      if (toast) toast.error(err.message);
+    }
+  },
+
+  async clientSetTrafficLimit(uuid, currentLimit) {
+    const newLimit = await XrayModal.prompt("Лимит трафика (GB)", "Введите новое значение", String(currentLimit));
+    if (!newLimit || parseInt(newLimit) === currentLimit) return;
+    const toast = window.adminUI?.toastManager;
+    try {
+      await this.api("PUT", `/clients/${uuid}`, { traffic_limit_gb: parseInt(newLimit) });
+      if (toast) toast.success(`Лимит изменён на ${newLimit} GB`);
+      await this.loadClients();
       this.showClientInfo(uuid);
     } catch (err) {
       if (toast) toast.error(err.message);
@@ -531,6 +546,22 @@ const xrayCard = {
     try {
       await this.api("POST", `/clients/${client.uuid}/extend`, { days: parseInt(days) });
       if (toast) toast.success("Продлено");
+    } catch (err) {
+      if (toast) toast.error(err.message);
+    }
+  },
+
+  async adminSetTrafficLimit() {
+    if (!this.clients.length) { XrayModal.show("Лимит трафика", '<p class="text-muted">Нет клиентов</p>'); return; }
+    const client = await XrayModal.clientPicker("Выберите клиента для установки лимита", this.clients);
+    if (!client) return;
+    const newLimit = await XrayModal.prompt("Лимит трафика (GB)", "Введите значение", String(client.traffic_limit_gb || 100));
+    if (!newLimit) return;
+    const toast = window.adminUI?.toastManager;
+    try {
+      await this.api("PUT", `/clients/${client.uuid}`, { traffic_limit_gb: parseInt(newLimit) });
+      if (toast) toast.success(`Лимит ${client.name} изменён на ${newLimit} GB`);
+      await this.loadClients();
     } catch (err) {
       if (toast) toast.error(err.message);
     }
