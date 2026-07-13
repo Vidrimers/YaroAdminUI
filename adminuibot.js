@@ -281,7 +281,8 @@ function executeSSHOnServer(host, command) {
     const connConfig = {
       host: SERVER_IP,
       port: 22,
-      username: process.env.SSH_USERNAME || 'root'
+      username: process.env.SSH_USERNAME || 'root',
+      readyTimeout: 10000
     };
 
     if (sshPassword) connConfig.password = sshPassword;
@@ -293,7 +294,7 @@ function executeSSHOnServer(host, command) {
       // SSH from VPS to local server using vps_to_local key
       // Look up correct username from SERVERS config by IP
       const srvUser = Object.values(SERVERS).find(s => s.ip === host)?.user || 'vidrimers';
-      conn.exec(`ssh -i /root/.ssh/vps_to_local -o StrictHostKeyChecking=no ${srvUser}@${host} "${command}"`, (err, stream) => {
+      conn.exec(`ssh -i /root/.ssh/vps_to_local -o StrictHostKeyChecking=no -o ConnectTimeout=10 ${srvUser}@${host} "${command}"`, (err, stream) => {
         if (err) { conn.end(); return reject(err); }
         let output = '';
         let errorOutput = '';
@@ -318,7 +319,8 @@ function executeOnRouter(command) {
     const connConfig = {
       host: SERVER_IP,
       port: 22,
-      username: process.env.SSH_USERNAME || 'root'
+      username: process.env.SSH_USERNAME || 'root',
+      readyTimeout: 10000
     };
 
     if (sshPassword) connConfig.password = sshPassword;
@@ -328,7 +330,7 @@ function executeOnRouter(command) {
 
     conn.on('ready', () => {
       // Connect from VPS to router via SSH tunnel on port 2222
-      conn.exec(`ssh -o StrictHostKeyChecking=no -i /root/.ssh/vps_to_local -p 2222 root@127.0.0.1 "${command}"`, (err, stream) => {
+      conn.exec(`ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -i /root/.ssh/vps_to_local -p 2222 root@127.0.0.1 "${command}"`, (err, stream) => {
         if (err) { conn.end(); return reject(err); }
         let output = '';
         let errorOutput = '';
