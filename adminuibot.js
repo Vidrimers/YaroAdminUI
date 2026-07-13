@@ -343,6 +343,26 @@ function executeOnRouter(command) {
   });
 }
 
+// Execute on router with retry (handles tunnel downtime after power outages)
+async function executeOnRouterWithRetry(command, maxRetries = 3, retryDelayMs = 15000) {
+  let lastErr;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await executeOnRouter(command);
+    } catch (err) {
+      lastErr = err;
+      const isTunnelError = err.message.includes('2222') || err.message.includes('Connection reset') || err.message.includes('Connection refused') || err.message.includes('kex_exchange');
+      if (isTunnelError && attempt < maxRetries) {
+        console.log(`[WoL] Tunnel error (attempt ${attempt + 1}/${maxRetries + 1}), retrying in ${retryDelayMs / 1000}s...`);
+        await new Promise(r => setTimeout(r, retryDelayMs));
+        continue;
+      }
+      throw err;
+    }
+  }
+  throw lastErr;
+}
+
 // SSH to Windows PC (10.0.0.2) via VPS → router tunnel
 // Uses powershell -EncodedCommand with base64 to bypass shell escaping
 async function executeSSHOnWindows(command, retries = 2) {
@@ -777,7 +797,7 @@ bot.on('callback_query', async (query) => {
       try {
         console.log(`[WoL] Sending broadcast for dmd-b650 ${SERVERS.b650.mac}`);
         // wakeonlan runs on the router — connect VPS → router via SSH tunnel
-        await executeOnRouter(`wakeonlan -i 10.0.0.255 ${SERVERS.b650.mac}`);
+        await executeOnRouterWithRetry(`wakeonlan -i 10.0.0.255 ${SERVERS.b650.mac}`);
         bot.sendMessage(chatId, '✅ Сигнал WoL отправлен на dmd-b650');
         pollServerOnline(chatId, SERVERS.b650.ip, 'dmd-b650');
       } catch (err) {
@@ -1080,7 +1100,7 @@ h1{text-align:center;font-size:22px;margin:16px 0;color:#333}
     case 'intel_wake':
       try {
         console.log(`[WoL] Sending broadcast for Intel ${SERVERS.intel.mac}`);
-        await executeOnRouter(`wakeonlan -i 10.0.0.255 ${SERVERS.intel.mac}`);
+        await executeOnRouterWithRetry(`wakeonlan -i 10.0.0.255 ${SERVERS.intel.mac}`);
         bot.sendMessage(chatId, '✅ Сигнал WoL отправлен на Server Intel');
         pollServerOnline(chatId, SERVERS.intel.ip, 'Server Intel');
       } catch (err) {
@@ -1091,7 +1111,7 @@ h1{text-align:center;font-size:22px;margin:16px 0;color:#333}
     case 'r3_wake':
       try {
         console.log(`[WoL] Sending broadcast for R3 ${SERVERS.r3.mac}`);
-        await executeOnRouter(`wakeonlan -i 10.0.0.255 ${SERVERS.r3.mac}`);
+        await executeOnRouterWithRetry(`wakeonlan -i 10.0.0.255 ${SERVERS.r3.mac}`);
         bot.sendMessage(chatId, '✅ Сигнал WoL отправлен на Server R3');
         pollServerOnline(chatId, SERVERS.r3.ip, 'Server R3');
       } catch (err) {
@@ -1102,7 +1122,7 @@ h1{text-align:center;font-size:22px;margin:16px 0;color:#333}
     case 'all_wake':
       try {
         console.log(`[WoL] Sending broadcast to both servers via router`);
-        await executeOnRouter(`wakeonlan -i 10.0.0.255 ${SERVERS.intel.mac} && wakeonlan -i 10.0.0.255 ${SERVERS.r3.mac}`);
+        await executeOnRouterWithRetry(`wakeonlan -i 10.0.0.255 ${SERVERS.intel.mac} && wakeonlan -i 10.0.0.255 ${SERVERS.r3.mac}`);
         bot.sendMessage(chatId, '✅ Сигнал WoL отправлен на оба сервера');
         pollServerOnline(chatId, SERVERS.intel.ip, 'Server Intel');
         pollServerOnline(chatId, SERVERS.r3.ip, 'Server R3');
