@@ -2253,8 +2253,6 @@ bot.on("message", async (msg) => {
       return;
     }
     
-    if (text === '/rus_deploy') {
-    
     if (text === '/rus_disk') {
       try {
         bot.sendMessage(chatId, '⏳ Загружаю информацию о диске Rus сервера...');
