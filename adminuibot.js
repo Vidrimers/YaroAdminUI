@@ -3182,9 +3182,6 @@ bot.on('callback_query', async (query) => {
         }));
       }
     }).catch(() => {});
-    } catch (error) {
-      bot.sendMessage(chatId, `❌ Ошибка: ${error.message}`, { reply_markup: getRusPm2Keyboard() });
-    }
 
   } else if (data === 'rus_pm2_logs') {
     const processes = rusPm2ProcessesCache || DEFAULT_PM2_PROCESSES_RUS;
@@ -3194,9 +3191,6 @@ bot.on('callback_query', async (query) => {
     });
     keyboard.inline_keyboard.push([{ text: '⬅️ Назад', callback_data: 'rus_pm2' }]);
     bot.sendMessage(chatId, '🇷🇺 Выберите процесс для просмотра логов:', { reply_markup: keyboard });
-    } catch (error) {
-      bot.sendMessage(chatId, `❌ Ошибка: ${error.message}`, { reply_markup: getRusPm2Keyboard() });
-    }
 
   } else if (data.startsWith('rus_pm2_logs_')) {
     const RUS_IP = process.env.SERVER_RUS_IP || '185.244.172.188';
@@ -3270,15 +3264,6 @@ bot.on('callback_query', async (query) => {
     });
     keyboard.inline_keyboard.push([{ text: '⬅️ Назад', callback_data: 'rus_pm2' }]);
     bot.sendMessage(chatId, '🇷🇺 Выберите процесс для запуска:', { reply_markup: keyboard });
-      const keyboard = { inline_keyboard: [] };
-      processes.forEach(p => {
-        keyboard.inline_keyboard.push([{ text: `▶️ ${p.name}`, callback_data: `rus_pm2_start_${p.name}` }]);
-      });
-      keyboard.inline_keyboard.push([{ text: '⬅️ Назад', callback_data: 'rus_pm2' }]);
-      bot.sendMessage(chatId, '🇷🇺 Выберите процесс для запуска:', { reply_markup: keyboard });
-    } catch (error) {
-      bot.sendMessage(chatId, `❌ Ошибка: ${error.message}`, { reply_markup: getRusPm2Keyboard() });
-    }
 
   } else if (data.startsWith('rus_pm2_start_')) {
     const RUS_IP = process.env.SERVER_RUS_IP || '185.244.172.188';
@@ -3298,10 +3283,6 @@ bot.on('callback_query', async (query) => {
     });
     keyboard.inline_keyboard.push([{ text: '⬅️ Назад', callback_data: 'rus_pm2' }]);
     bot.sendMessage(chatId, '🇷🇺 Выберите процесс для Pull & Run:', { reply_markup: keyboard });
-      bot.sendMessage(chatId, '🇷🇺 Выберите процесс для Pull & Run:', { reply_markup: keyboard });
-    } catch (error) {
-      bot.sendMessage(chatId, `❌ Ошибка: ${error.message}`, { reply_markup: getRusPm2Keyboard() });
-    }
 
   } else if (data.startsWith('rus_pm2_pullrun_')) {
     const RUS_IP = process.env.SERVER_RUS_IP || '185.244.172.188';
