@@ -3294,7 +3294,7 @@ bot.on('callback_query', async (query) => {
         bot.sendMessage(chatId, `🇷🇺 Деплой <b>${processName}</b>...\n\n⏳ git pull + npm install + build + pm2 restart...`, { parse_mode: 'HTML' });
         const pullOutput = await executeSSHCommand('cd /home/pet-gang && git pull origin master 2>&1', RUS_IP);
         bot.sendMessage(chatId, `📥 Git pull:\n<code>${escapeHtml(pullOutput.substring(0, 1000))}</code>`, { parse_mode: 'HTML' });
-        const npmOutput = await executeSSHCommand('cd /home/pet-gang && npm install --production 2>&1 | tail -5', RUS_IP);
+        const npmOutput = await executeSSHCommand('cd /home/pet-gang && npm install 2>&1 | tail -5', RUS_IP);
         bot.sendMessage(chatId, `📦 NPM install:\n<code>${escapeHtml(npmOutput)}</code>`, { parse_mode: 'HTML' });
         const buildOutput = await executeSSHCommand('cd /home/pet-gang && npx vite build 2>&1 | tail -5', RUS_IP);
         bot.sendMessage(chatId, `🔨 Build:\n<code>${escapeHtml(buildOutput)}</code>`, { parse_mode: 'HTML' });
