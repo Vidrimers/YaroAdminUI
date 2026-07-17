@@ -197,9 +197,10 @@ function escapeHtml(text) {
 }
 
 // Функция для выполнения SSH команд
-function executeSSHCommand(command) {
+function executeSSHCommand(command, targetIp) {
   return new Promise((resolve, reject) => {
     const conn = new SSHClient();
+    const host = targetIp || SERVER_IP;
     
     // Properly expand ~ in SSH_KEY_PATH
     const sshKeyPath = (process.env.SSH_KEY_PATH || `${os.homedir()}/.ssh/id_rsa`).replace(
@@ -210,7 +211,7 @@ function executeSSHCommand(command) {
     
     // Prepare connection config
     const connConfig = {
-      host: SERVER_IP,
+      host: host,
       port: 22,
       username: process.env.SSH_USERNAME || process.env.SSH_USER || 'root'
     };
@@ -259,7 +260,7 @@ function executeSSHCommand(command) {
       });
     }).on('error', (err) => {
       console.error('SSH Connection Error:', {
-        host: SERVER_IP,
+        host: host,
         username: connConfig.username,
         hasPassword: !!connConfig.password,
         hasPrivateKey: !!connConfig.privateKey,
@@ -526,7 +527,30 @@ function getMenuInlineKeyboard() {
         { text: '💾 Диск', callback_data: 'menu_disk' }
       ],
       [
-        { text: '🏠 Home', callback_data: 'menu_home' }
+        { text: '🏠 Home', callback_data: 'menu_home' },
+        { text: '🇷🇺 Rus', callback_data: 'menu_rus' }
+      ]
+    ]
+  };
+}
+
+// Rus server menu (без Home, с кнопкой назад на prod)
+function getRusMenuKeyboard() {
+  return {
+    inline_keyboard: [
+      [
+        { text: '📊 Статус сервера', callback_data: 'rus_status' },
+        { text: '🚀 PM2', callback_data: 'rus_pm2' }
+      ],
+      [
+        { text: '💾 Диск', callback_data: 'rus_disk' },
+        { text: '⚙️ Процессы', callback_data: 'rus_processes' }
+      ],
+      [
+        { text: '🔄 Git Pull + Deploy', callback_data: 'rus_deploy' }
+      ],
+      [
+        { text: '⬅️ Назад к prod', callback_data: 'menu_back' }
       ]
     ]
   };
@@ -763,6 +787,31 @@ bot.on('callback_query', async (query) => {
         parse_mode: 'HTML',
         reply_markup: getMenuInlineKeyboard()
       });
+      break;
+
+    // ============ RUS SERVER MENU ============
+    case 'menu_rus':
+      bot.editMessageText('🇷🇺 <b>Rus сервер (185.244.172.188)</b>\n\n📋 Меню управления:', {
+        chat_id: chatId,
+        message_id: query.message.message_id,
+        parse_mode: 'HTML',
+        reply_markup: getRusMenuKeyboard()
+      });
+      break;
+    case 'rus_status':
+      bot.emit('message', { chat: { id: chatId }, from: { id: userId }, text: '/rus_status' });
+      break;
+    case 'rus_pm2':
+      bot.emit('message', { chat: { id: chatId }, from: { id: userId }, text: '/rus_pm2' });
+      break;
+    case 'rus_disk':
+      bot.emit('message', { chat: { id: chatId }, from: { id: userId }, text: '/rus_disk' });
+      break;
+    case 'rus_processes':
+      bot.emit('message', { chat: { id: chatId }, from: { id: userId }, text: '/rus_processes' });
+      break;
+    case 'rus_deploy':
+      bot.emit('message', { chat: { id: chatId }, from: { id: userId }, text: '/rus_deploy' });
       break;
 
     // ============ SERVER INTEL ============
@@ -2141,6 +2190,99 @@ bot.on("message", async (msg) => {
         }
         return;
       }
+    }
+    
+    // ============ RUS SERVER COMMANDS ============
+    const RUS_IP = process.env.SERVER_RUS_IP || '185.244.172.188';
+    
+    if (text === '/rus_status') {
+      try {
+        bot.sendMessage(chatId, '⏳ Загружаю статус Rus сервера...');
+        const uptimeOutput = await executeSSHCommand('uptime -p 2>/dev/null || uptime', RUS_IP);
+        const uptime = uptimeOutput.replace('up ', '').trim();
+        const memOutput = await executeSSHCommand('free | grep Mem', RUS_IP);
+        const memParts = memOutput.split(/\s+/);
+        const memTotal = parseInt(memParts[1]);
+        const memUsed = parseInt(memParts[2]);
+        const memPercent = ((memUsed / memTotal) * 100).toFixed(1);
+        const cpuOutput = await executeSSHCommand('top -bn1 | grep "Cpu(s)" | sed "s/.*, *\\([0-9.]*\\)%* id.*/\\1/" | awk \'{print 100 - $1}\'', RUS_IP);
+        const cpuPercent = parseFloat(cpuOutput).toFixed(1);
+        const diskOutput = await executeSSHCommand('df -h / | tail -1', RUS_IP);
+        const diskParts = diskOutput.split(/\s+/);
+        const diskPercent = diskParts[4].replace('%', '');
+        
+        bot.sendMessage(chatId,
+          `🇷🇺 <b>Rus сервер (${RUS_IP})</b>\n\n` +
+          `⏰ Аптайм: ${uptime}\n` +
+          `🧠 RAM: ${memPercent}% (${memUsed}/${memTotal} KB)\n` +
+          `⚡ CPU: ${cpuPercent}%\n` +
+          `💾 Диск: ${diskPercent}%`,
+          { parse_mode: 'HTML', reply_markup: getRusMenuKeyboard() }
+        );
+      } catch (error) {
+        bot.sendMessage(chatId, `❌ Ошибка: ${error.message}`, { reply_markup: getRusMenuKeyboard() });
+      }
+      return;
+    }
+    
+    if (text === '/rus_pm2') {
+      try {
+        bot.sendMessage(chatId, '⏳ Загружаю PM2 процессы Rus сервера...');
+        const output = await executeSSHCommand('export PATH=$PATH:/usr/local/bin:/usr/bin:~/.npm-global/bin:~/.nvm/versions/node/*/bin && pm2 list 2>&1', RUS_IP);
+        bot.sendMessage(chatId, `🇷🇺 <b>PM2 процессы (${RUS_IP}):\n\n</b><pre>${escapeHtml(output)}</pre>`, {
+          parse_mode: 'HTML', reply_markup: getRusMenuKeyboard()
+        });
+      } catch (error) {
+        bot.sendMessage(chatId, `❌ Ошибка: ${error.message}`, { reply_markup: getRusMenuKeyboard() });
+      }
+      return;
+    }
+    
+    if (text === '/rus_disk') {
+      try {
+        bot.sendMessage(chatId, '⏳ Загружаю информацию о диске Rus сервера...');
+        const output = await executeSSHCommand('df -h', RUS_IP);
+        bot.sendMessage(chatId, `🇷🇺 <b>Диск (${RUS_IP}):\n\n</b><pre>${escapeHtml(output)}</pre>`, {
+          parse_mode: 'HTML', reply_markup: getRusMenuKeyboard()
+        });
+      } catch (error) {
+        bot.sendMessage(chatId, `❌ Ошибка: ${error.message}`, { reply_markup: getRusMenuKeyboard() });
+      }
+      return;
+    }
+    
+    if (text === '/rus_processes') {
+      try {
+        bot.sendMessage(chatId, '⏳ Загружаю процессы Rus сервера...');
+        const output = await executeSSHCommand('ps aux --sort=-%mem | head -15', RUS_IP);
+        bot.sendMessage(chatId, `🇷🇺 <b>Процессы (${RUS_IP}):\n\n</b><pre>${escapeHtml(output)}</pre>`, {
+          parse_mode: 'HTML', reply_markup: getRusMenuKeyboard()
+        });
+      } catch (error) {
+        bot.sendMessage(chatId, `❌ Ошибка: ${error.message}`, { reply_markup: getRusMenuKeyboard() });
+      }
+      return;
+    }
+    
+    if (text === '/rus_deploy') {
+      try {
+        bot.sendMessage(chatId, `🇷🇺 Деплой pet-gang.ru...\n\n⏳ git pull + npm install + build + pm2 restart...`);
+        
+        const pullOutput = await executeSSHCommand('cd /home/pet-gang && git pull origin master 2>&1', RUS_IP);
+        bot.sendMessage(chatId, `📥 Git pull:\n<code>${escapeHtml(pullOutput.substring(0, 1000))}</code>`, { parse_mode: 'HTML' });
+        
+        const npmOutput = await executeSSHCommand('cd /home/pet-gang && npm install --production 2>&1 | tail -5', RUS_IP);
+        bot.sendMessage(chatId, `📦 NPM install:\n<code>${escapeHtml(npmOutput)}</code>`, { parse_mode: 'HTML' });
+        
+        const buildOutput = await executeSSHCommand('cd /home/pet-gang && npx vite build 2>&1 | tail -5', RUS_IP);
+        bot.sendMessage(chatId, `🔨 Build:\n<code>${escapeHtml(buildOutput)}</code>`, { parse_mode: 'HTML' });
+        
+        await executeSSHCommand('pm2 restart pet-gang', RUS_IP);
+        bot.sendMessage(chatId, `✅ pet-gang.ru обновлён и перезапущен!`, { reply_markup: getRusMenuKeyboard() });
+      } catch (error) {
+        bot.sendMessage(chatId, `❌ Ошибка деплоя: ${error.message}`, { reply_markup: getRusMenuKeyboard() });
+      }
+      return;
     }
     
     // Неизвестная команда
