@@ -2296,7 +2296,7 @@ bot.on('callback_query', async (query) => {
   const data = query.data;
 
   // Skip if already handled by first callback handler (menu, home, server)
-  if (!data.startsWith('fw_') && !data.startsWith('other_') && !data.startsWith('pm2_')) return;
+  if (!data.startsWith('fw_') && !data.startsWith('other_') && !data.startsWith('pm2_') && !data.startsWith('rus_')) return;
 
   // Check admin access
   if (!isAdmin(userId)) {
