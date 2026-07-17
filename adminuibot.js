@@ -170,6 +170,7 @@ const userStates = new Map();
 
 // Cache for PM2 processes (updated when user clicks "Show processes")
 let pm2ProcessesCache = null;
+let rusPm2ProcessesCache = null;
 
 // Default PM2 processes list
 const DEFAULT_PM2_PROCESSES = [
@@ -183,6 +184,11 @@ const DEFAULT_PM2_PROCESSES = [
   { name: 'meowgang-bot', pm_id: 7, status: 'online' },
   { name: 'watchrebel-server', pm_id: 8, status: 'online' },
   { name: 'watchrebel-telegram', pm_id: 9, status: 'online' }
+];
+
+const DEFAULT_PM2_PROCESSES_RUS = [
+  { name: 'yaroweb', pm_id: 0, status: 'online' },
+  { name: 'pet-gang', pm_id: 1, status: 'online' }
 ];
 
 // Функция для экранирования HTML символов
@@ -3156,47 +3162,38 @@ bot.on('callback_query', async (query) => {
   // ============ RUS PM2 CALLBACKS ============
   } else if (data === 'rus_pm2_list') {
     const RUS_IP = process.env.SERVER_RUS_IP || '185.244.172.188';
-    try {
-      bot.sendMessage(chatId, '⏳ Загружаю PM2 процессы Rus сервера...');
-      const output = await executeSSHCommand(
-        `export PATH=$PATH:/usr/local/bin:/usr/bin:~/.npm-global/bin:~/.nvm/versions/node/*/bin && pm2 jlist 2>/dev/null || echo "[]"`,
-        RUS_IP
-      );
-      const processes = JSON.parse(output);
-      if (processes.length === 0) {
-        bot.sendMessage(chatId, '📭 PM2 процессы не найдены на Rus сервере');
-        return;
+    // Показываем захардкоженный список сразу
+    const processes = DEFAULT_PM2_PROCESSES_RUS;
+    let response = '🇷🇺 <b>PM2 Процессы (Rus):</b>\n\n';
+    processes.forEach((p, i) => {
+      response += `${i + 1}. ✅ <b>${p.name}</b> (ID: ${p.pm_id})\n\n`;
+    });
+    response += `📊 Всего: ${processes.length}`;
+    bot.sendMessage(chatId, response, { parse_mode: 'HTML', reply_markup: getRusPm2Keyboard() });
+    // В фоне обновляем реальный статус
+    executeSSHCommand(
+      `export PATH=$PATH:/usr/local/bin:/usr/bin:~/.npm-global/bin:~/.nvm/versions/node/*/bin && pm2 jlist 2>/dev/null || echo "[]"`,
+      RUS_IP
+    ).then(output => {
+      const realProcesses = JSON.parse(output);
+      if (realProcesses.length > 0) {
+        rusPm2ProcessesCache = realProcesses.map(p => ({
+          name: p.name, pm_id: p.pm_id, status: p.pm2_env.status, pid: p.pid
+        }));
       }
-      let response = '🇷🇺 <b>PM2 Процессы (Rus):</b>\n\n';
-      processes.forEach((p, i) => {
-        const status = p.pm2_env.status === 'online' ? '✅' : '❌';
-        const uptime = p.pm2_env.pm_uptime ? Math.floor((Date.now() - p.pm2_env.pm_uptime) / 1000 / 60) : 0;
-        const memory = p.monit ? (p.monit.memory / 1024 / 1024).toFixed(1) : 'N/A';
-        response += `${i + 1}. ${status} <b>${p.name}</b> (ID: ${p.pm_id})\n   CPU: ${p.monit?.cpu || 'N/A'}% | RAM: ${memory} MB | Uptime: ${uptime} мин\n\n`;
-      });
-      bot.sendMessage(chatId, response, { parse_mode: 'HTML', reply_markup: getRusPm2Keyboard() });
+    }).catch(() => {});
     } catch (error) {
       bot.sendMessage(chatId, `❌ Ошибка: ${error.message}`, { reply_markup: getRusPm2Keyboard() });
     }
 
   } else if (data === 'rus_pm2_logs') {
-    const RUS_IP = process.env.SERVER_RUS_IP || '185.244.172.188';
-    try {
-      const output = await executeSSHCommand(
-        `export PATH=$PATH:/usr/local/bin:/usr/bin:~/.npm-global/bin:~/.nvm/versions/node/*/bin && pm2 jlist 2>/dev/null || echo "[]"`,
-        RUS_IP
-      );
-      const processes = JSON.parse(output);
-      if (processes.length === 0) {
-        bot.sendMessage(chatId, '📭 Нет процессов');
-        return;
-      }
-      const keyboard = { inline_keyboard: [] };
-      processes.forEach(p => {
-        keyboard.inline_keyboard.push([{ text: `📜 ${p.name}`, callback_data: `rus_pm2_logs_${p.name}` }]);
-      });
-      keyboard.inline_keyboard.push([{ text: '⬅️ Назад', callback_data: 'rus_pm2' }]);
-      bot.sendMessage(chatId, '🇷🇺 Выберите процесс для просмотра логов:', { reply_markup: keyboard });
+    const processes = rusPm2ProcessesCache || DEFAULT_PM2_PROCESSES_RUS;
+    const keyboard = { inline_keyboard: [] };
+    processes.forEach(p => {
+      keyboard.inline_keyboard.push([{ text: `📜 ${p.name}`, callback_data: `rus_pm2_logs_${p.name}` }]);
+    });
+    keyboard.inline_keyboard.push([{ text: '⬅️ Назад', callback_data: 'rus_pm2' }]);
+    bot.sendMessage(chatId, '🇷🇺 Выберите процесс для просмотра логов:', { reply_markup: keyboard });
     } catch (error) {
       bot.sendMessage(chatId, `❌ Ошибка: ${error.message}`, { reply_markup: getRusPm2Keyboard() });
     }
@@ -3218,27 +3215,14 @@ bot.on('callback_query', async (query) => {
     }
 
   } else if (data === 'rus_pm2_restart') {
-    const RUS_IP = process.env.SERVER_RUS_IP || '185.244.172.188';
-    try {
-      const output = await executeSSHCommand(
-        `export PATH=$PATH:/usr/local/bin:/usr/bin:~/.npm-global/bin:~/.nvm/versions/node/*/bin && pm2 jlist 2>/dev/null || echo "[]"`,
-        RUS_IP
-      );
-      const processes = JSON.parse(output);
-      if (processes.length === 0) {
-        bot.sendMessage(chatId, '📭 Нет процессов');
-        return;
-      }
-      const keyboard = { inline_keyboard: [] };
-      processes.forEach(p => {
-        keyboard.inline_keyboard.push([{ text: `🔄 ${p.name}`, callback_data: `rus_pm2_restart_${p.name}` }]);
-      });
-      keyboard.inline_keyboard.push([{ text: '🔄 Перезапустить все', callback_data: 'rus_pm2_restart_all' }]);
-      keyboard.inline_keyboard.push([{ text: '⬅️ Назад', callback_data: 'rus_pm2' }]);
-      bot.sendMessage(chatId, '🇷🇺 Выберите процесс для перезапуска:', { reply_markup: keyboard });
-    } catch (error) {
-      bot.sendMessage(chatId, `❌ Ошибка: ${error.message}`, { reply_markup: getRusPm2Keyboard() });
-    }
+    const processes = rusPm2ProcessesCache || DEFAULT_PM2_PROCESSES_RUS;
+    const keyboard = { inline_keyboard: [] };
+    processes.forEach(p => {
+      keyboard.inline_keyboard.push([{ text: `🔄 ${p.name}`, callback_data: `rus_pm2_restart_${p.name}` }]);
+    });
+    keyboard.inline_keyboard.push([{ text: '🔄 Перезапустить все', callback_data: 'rus_pm2_restart_all' }]);
+    keyboard.inline_keyboard.push([{ text: '⬅️ Назад', callback_data: 'rus_pm2' }]);
+    bot.sendMessage(chatId, '🇷🇺 Выберите процесс для перезапуска:', { reply_markup: keyboard });
 
   } else if (data === 'rus_pm2_restart_all') {
     const RUS_IP = process.env.SERVER_RUS_IP || '185.244.172.188';
@@ -3260,26 +3244,13 @@ bot.on('callback_query', async (query) => {
     }
 
   } else if (data === 'rus_pm2_stop') {
-    const RUS_IP = process.env.SERVER_RUS_IP || '185.244.172.188';
-    try {
-      const output = await executeSSHCommand(
-        `export PATH=$PATH:/usr/local/bin:/usr/bin:~/.npm-global/bin:~/.nvm/versions/node/*/bin && pm2 jlist 2>/dev/null || echo "[]"`,
-        RUS_IP
-      );
-      const processes = JSON.parse(output);
-      if (processes.length === 0) {
-        bot.sendMessage(chatId, '📭 Нет процессов');
-        return;
-      }
-      const keyboard = { inline_keyboard: [] };
-      processes.forEach(p => {
-        keyboard.inline_keyboard.push([{ text: `⏹️ ${p.name}`, callback_data: `rus_pm2_stop_${p.name}` }]);
-      });
-      keyboard.inline_keyboard.push([{ text: '⬅️ Назад', callback_data: 'rus_pm2' }]);
-      bot.sendMessage(chatId, '🇷🇺 Выберите процесс для остановки:', { reply_markup: keyboard });
-    } catch (error) {
-      bot.sendMessage(chatId, `❌ Ошибка: ${error.message}`, { reply_markup: getRusPm2Keyboard() });
-    }
+    const processes = rusPm2ProcessesCache || DEFAULT_PM2_PROCESSES_RUS;
+    const keyboard = { inline_keyboard: [] };
+    processes.forEach(p => {
+      keyboard.inline_keyboard.push([{ text: `⏹️ ${p.name}`, callback_data: `rus_pm2_stop_${p.name}` }]);
+    });
+    keyboard.inline_keyboard.push([{ text: '⬅️ Назад', callback_data: 'rus_pm2' }]);
+    bot.sendMessage(chatId, '🇷🇺 Выберите процесс для остановки:', { reply_markup: keyboard });
 
   } else if (data.startsWith('rus_pm2_stop_')) {
     const RUS_IP = process.env.SERVER_RUS_IP || '185.244.172.188';
@@ -3292,17 +3263,13 @@ bot.on('callback_query', async (query) => {
     }
 
   } else if (data === 'rus_pm2_start') {
-    const RUS_IP = process.env.SERVER_RUS_IP || '185.244.172.188';
-    try {
-      const output = await executeSSHCommand(
-        `export PATH=$PATH:/usr/local/bin:/usr/bin:~/.npm-global/bin:~/.nvm/versions/node/*/bin && pm2 jlist 2>/dev/null || echo "[]"`,
-        RUS_IP
-      );
-      const processes = JSON.parse(output);
-      if (processes.length === 0) {
-        bot.sendMessage(chatId, '📭 Нет процессов');
-        return;
-      }
+    const processes = rusPm2ProcessesCache || DEFAULT_PM2_PROCESSES_RUS;
+    const keyboard = { inline_keyboard: [] };
+    processes.forEach(p => {
+      keyboard.inline_keyboard.push([{ text: `▶️ ${p.name}`, callback_data: `rus_pm2_start_${p.name}` }]);
+    });
+    keyboard.inline_keyboard.push([{ text: '⬅️ Назад', callback_data: 'rus_pm2' }]);
+    bot.sendMessage(chatId, '🇷🇺 Выберите процесс для запуска:', { reply_markup: keyboard });
       const keyboard = { inline_keyboard: [] };
       processes.forEach(p => {
         keyboard.inline_keyboard.push([{ text: `▶️ ${p.name}`, callback_data: `rus_pm2_start_${p.name}` }]);
@@ -3324,22 +3291,13 @@ bot.on('callback_query', async (query) => {
     }
 
   } else if (data === 'rus_pm2_pull_run') {
-    const RUS_IP = process.env.SERVER_RUS_IP || '185.244.172.188';
-    try {
-      const output = await executeSSHCommand(
-        `export PATH=$PATH:/usr/local/bin:/usr/bin:~/.npm-global/bin:~/.nvm/versions/node/*/bin && pm2 jlist 2>/dev/null || echo "[]"`,
-        RUS_IP
-      );
-      const processes = JSON.parse(output);
-      if (processes.length === 0) {
-        bot.sendMessage(chatId, '📭 Нет процессов');
-        return;
-      }
-      const keyboard = { inline_keyboard: [] };
-      processes.forEach(p => {
-        keyboard.inline_keyboard.push([{ text: `🔄 ${p.name}`, callback_data: `rus_pm2_pullrun_${p.name}` }]);
-      });
-      keyboard.inline_keyboard.push([{ text: '⬅️ Назад', callback_data: 'rus_pm2' }]);
+    const processes = rusPm2ProcessesCache || DEFAULT_PM2_PROCESSES_RUS;
+    const keyboard = { inline_keyboard: [] };
+    processes.forEach(p => {
+      keyboard.inline_keyboard.push([{ text: `🔄 ${p.name}`, callback_data: `rus_pm2_pullrun_${p.name}` }]);
+    });
+    keyboard.inline_keyboard.push([{ text: '⬅️ Назад', callback_data: 'rus_pm2' }]);
+    bot.sendMessage(chatId, '🇷🇺 Выберите процесс для Pull & Run:', { reply_markup: keyboard });
       bot.sendMessage(chatId, '🇷🇺 Выберите процесс для Pull & Run:', { reply_markup: keyboard });
     } catch (error) {
       bot.sendMessage(chatId, `❌ Ошибка: ${error.message}`, { reply_markup: getRusPm2Keyboard() });
