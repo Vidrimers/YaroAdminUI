@@ -2855,9 +2855,10 @@ bot.on('callback_query', async (query) => {
       try {
         bot.sendMessage(chatId, `🔄 Запускаю деплой <b>${processName}</b>...`, { parse_mode: 'HTML' });
         const pullOutput = await executeSSHCommand('cd /home/watchrebel && git pull 2>&1');
+        const installOutput = await executeSSHCommand('cd /home/watchrebel && npm install 2>&1');
         const buildOutput = await executeSSHCommand('cd /home/watchrebel && npm run build --workspace=client 2>&1');
         await executeSSHCommand('pm2 restart watchrebel-server');
-        bot.sendMessage(chatId, `✅ ${processName} обновлён и перезапущен!\n\n📥 Pull:\n<code>${escapeHtml(pullOutput.substring(0, 1500))}</code>\n\n🔨 Build:\n<code>${escapeHtml(buildOutput.substring(0, 1500))}</code>`, {
+        bot.sendMessage(chatId, `✅ ${processName} обновлён и перезапущен!\n\n📥 Pull:\n<code>${escapeHtml(pullOutput.substring(0, 1000))}</code>\n\n📦 Install:\n<code>${escapeHtml(installOutput.substring(0, 1000))}</code>\n\n🔨 Build:\n<code>${escapeHtml(buildOutput.substring(0, 1000))}</code>`, {
           parse_mode: 'HTML',
           reply_markup: getMenuInlineKeyboard()
         });
