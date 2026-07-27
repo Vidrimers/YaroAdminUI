@@ -2854,7 +2854,7 @@ bot.on('callback_query', async (query) => {
     if (processName === 'watchrebel-server') {
       try {
         bot.sendMessage(chatId, `🔄 Запускаю деплой <b>${processName}</b>...`, { parse_mode: 'HTML' });
-        const pullOutput = await executeSSHCommand('cd /home/watchrebel && git pull 2>&1');
+        const pullOutput = await executeSSHCommand('cd /home/watchrebel && git fetch origin && git reset --hard origin/master 2>&1');
         const installOutput = await executeSSHCommand('cd /home/watchrebel && npm install 2>&1');
         const buildOutput = await executeSSHCommand('cd /home/watchrebel && npm run build --workspace=client 2>&1');
         await executeSSHCommand('pm2 restart watchrebel-server');
