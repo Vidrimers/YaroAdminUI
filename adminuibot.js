@@ -49,9 +49,31 @@ if (!TELEGRAM_BOT_TOKEN) {
 class DB {
   constructor(dbPath) {
     this.db = new sqlite3.Database(dbPath);
+    // Ensure auth_codes table exists (same as adminui.js)
+    this.db.run(`CREATE TABLE IF NOT EXISTS auth_codes (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      code TEXT NOT NULL,
+      telegram_user_id INTEGER NOT NULL,
+      expires_at DATETIME NOT NULL,
+      used INTEGER DEFAULT 0,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )`);
   }
   close() {
     return new Promise((resolve) => this.db.close(resolve));
+  }
+  storeAuthCode(code, telegramUserId, expiresAt) {
+    return new Promise((resolve, reject) => {
+      // Store as SQLite-compatible datetime (UTC, no Z suffix)
+      const expires = expiresAt.toISOString().replace("T", " ").replace("Z", "").split(".")[0];
+      this.db.run(
+        "INSERT INTO auth_codes (code, telegram_user_id, expires_at) VALUES (?, ?, ?)",
+        [code, telegramUserId, expires],
+        function (err) {
+          err ? reject(err) : resolve({ id: this.lastID });
+        }
+      );
+    });
   }
   getFavoriteCommands(username) {
     return new Promise((resolve, reject) => {
@@ -440,9 +462,9 @@ async function executeSSHOnWindows(command, retries = 2) {
 
 // Функция проверки прав администратора
 function isAdmin(userId) {
-  // Если TELEGRAM_ADMIN_ID не установлен, разрешаем всем (для разработки)
   if (!TELEGRAM_ADMIN_ID) {
-    return true;
+    console.error("[SECURITY] TELEGRAM_ADMIN_ID is not set — denying all admin access");
+    return false;
   }
   return userId === TELEGRAM_ADMIN_ID;
 }
@@ -1442,6 +1464,15 @@ bot.on("message", async (msg) => {
     
     const authCode = generateAuthCode();
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 минут
+
+    // Store code in database for server-side verification
+    try {
+      await db.storeAuthCode(authCode, userId, expiresAt);
+    } catch (err) {
+      console.error("[AUTH] Failed to store auth code:", err.message);
+      bot.sendMessage(chatId, "❌ Ошибка генерации кода. Попробуйте позже.");
+      return;
+    }
 
     bot.sendMessage(
       chatId,

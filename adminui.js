@@ -15,9 +15,14 @@ dotenv.config();
 
 const PORT = process.env.PORT || 3000;
 const HOST = process.env.HOST || "localhost";
-const JWT_SECRET = process.env.JWT_SECRET || "secret";
+const JWT_SECRET = process.env.JWT_SECRET;
 const DB_PATH = process.env.DB_PATH || "./adminui.db";
 const SERVER_IP = process.env.SERVER_IP || "localhost";
+
+if (!JWT_SECRET || JWT_SECRET === "secret" || JWT_SECRET === "your_jwt_secret_key_change_me_in_production") {
+  console.error("FATAL: JWT_SECRET is not set or uses a default value. Set a strong random secret in .env");
+  process.exit(1);
+}
 
 class DB {
   constructor(dbPath) {
@@ -74,6 +79,56 @@ class DB {
         }
       }
     );
+    // Auth codes table for Telegram verification
+    this.db.run(`CREATE TABLE IF NOT EXISTS auth_codes (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      code TEXT NOT NULL,
+      telegram_user_id INTEGER NOT NULL,
+      expires_at DATETIME NOT NULL,
+      used INTEGER DEFAULT 0,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )`);
+  }
+
+  storeAuthCode(code, telegramUserId, expiresAt) {
+    return new Promise((resolve, reject) => {
+      // Store as SQLite-compatible datetime (UTC, no Z suffix)
+      const expires = expiresAt.toISOString().replace("T", " ").replace("Z", "").split(".")[0];
+      this.db.run(
+        "INSERT INTO auth_codes (code, telegram_user_id, expires_at) VALUES (?, ?, ?)",
+        [code, telegramUserId, expires],
+        function (err) {
+          err ? reject(err) : resolve({ id: this.lastID });
+        }
+      );
+    });
+  }
+
+  verifyAuthCode(code) {
+    return new Promise((resolve, reject) => {
+      this.db.get(
+        "SELECT * FROM auth_codes WHERE code = ? AND used = 0 AND expires_at > datetime('now', 'utc') ORDER BY created_at DESC LIMIT 1",
+        [code],
+        (err, row) => {
+          if (err) return reject(err);
+          if (!row) return resolve(null);
+          // Mark as used
+          this.db.run("UPDATE auth_codes SET used = 1 WHERE id = ?", [row.id]);
+          resolve(row);
+        }
+      );
+    });
+  }
+
+  cleanupExpiredAuthCodes() {
+    return new Promise((resolve, reject) => {
+      this.db.run(
+        "DELETE FROM auth_codes WHERE expires_at < datetime('now') OR used = 1",
+        function (err) {
+          err ? reject(err) : resolve(this.changes);
+        }
+      );
+    });
   }
   getUser(username) {
     return new Promise((resolve, reject) => {
@@ -375,8 +430,41 @@ String.prototype.expandUser = function () {
   return this.replace("~", process.env.HOME || "/root");
 };
 
+// Simple in-memory rate limiter for auth endpoints
+const authAttempts = new Map();
+function rateLimitAuth(req, res, next) {
+  const ip = req.ip || req.connection?.remoteAddress || "unknown";
+  const now = Date.now();
+  const windowMs = 15 * 60 * 1000; // 15 minutes
+  const maxAttempts = 10;
+
+  let record = authAttempts.get(ip);
+  if (!record || now - record.windowStart > windowMs) {
+    record = { windowStart: now, count: 0 };
+    authAttempts.set(ip, record);
+  }
+  record.count++;
+  if (record.count > maxAttempts) {
+    return res.status(429).json({ message: "Too many attempts. Try again later." });
+  }
+  next();
+}
+
+// Clean up stale rate limit entries every 10 minutes
+setInterval(() => {
+  const now = Date.now();
+  for (const [ip, record] of authAttempts) {
+    if (now - record.windowStart > 30 * 60 * 1000) authAttempts.delete(ip);
+  }
+}, 10 * 60 * 1000);
+
 const app = express();
 const db = new DB(DB_PATH);
+
+// Clean up expired auth codes every hour
+setInterval(() => {
+  db.cleanupExpiredAuthCodes().catch(() => {});
+}, 60 * 60 * 1000);
 
 app.use(
   cors({ origin: process.env.CORS_ORIGIN || `http://localhost:${PORT}` })
@@ -400,7 +488,7 @@ app.get("/", (req, res) =>
 );
 
 // SSH Auth - generate message for signing
-app.post("/api/auth/ssh-message", (req, res) => {
+app.post("/api/auth/ssh-message", rateLimitAuth, (req, res) => {
   try {
     const SSH_MESSAGE_PREFIX =
       process.env.SSH_MESSAGE_PREFIX || "YaroAdminUI-Auth";
@@ -413,57 +501,96 @@ app.post("/api/auth/ssh-message", (req, res) => {
   }
 });
 
-app.post("/api/auth/ssh-verify", async (req, res) => {
+app.post("/api/auth/ssh-verify", rateLimitAuth, async (req, res) => {
   try {
     const { message, signature } = req.body;
 
     if (!message || !signature) {
-      return res
-        .status(400)
-        .json({ message: "Message and signature required" });
+      return res.status(400).json({ message: "Message and signature required" });
     }
 
-    // Try to read SSH public key
+    // Verify message has our prefix to prevent replay with arbitrary messages
+    const SSH_MESSAGE_PREFIX = process.env.SSH_MESSAGE_PREFIX || "YaroAdminUI-Auth";
+    if (!message.startsWith(SSH_MESSAGE_PREFIX)) {
+      return res.status(400).json({ message: "Invalid message format" });
+    }
+
+    // Get SSH public key
     let publicKey = process.env.SSH_PUBLIC_KEY;
-
     if (!publicKey) {
-      try {
-        const keyPath =
-          process.env.SSH_KEY_PATH ||
-          path.join(process.env.HOME || "/root", ".ssh", "id_rsa.pub");
-
-        if (fs.existsSync(keyPath)) {
-          publicKey = fs.readFileSync(keyPath, "utf-8").trim();
-        }
-      } catch (error) {
-        console.error("Error reading SSH key:", error);
+      const keyPath = (process.env.SSH_KEY_PATH || "~/.ssh/id_rsa.pub")
+        .replace("~", os.homedir());
+      // Try .pub variant
+      const pubPath = keyPath.endsWith(".pub") ? keyPath : keyPath + ".pub";
+      if (fs.existsSync(pubPath)) {
+        publicKey = fs.readFileSync(pubPath, "utf-8").trim();
       }
     }
 
-    // For development: if no public key found, accept any signature
-    // In production, this should fail
     if (!publicKey) {
-      console.warn(
-        "SSH_PUBLIC_KEY not configured - accepting any signature for development"
-      );
+      return res.status(500).json({ message: "SSH public key not configured on server" });
     }
 
-    // For now, accept the signature if we have message and signature
-    // Full verification would require ssh-keygen command
+    // Verify signature using ssh-keygen -Y verify
+    const allowedSigners = path.join(os.tmpdir(), `adminui_ssh_signers_${Date.now()}`);
+    const sigFile = path.join(os.tmpdir(), `adminui_ssh_sig_${Date.now()}`);
+    const msgFile = path.join(os.tmpdir(), `adminui_ssh_msg_${Date.now()}`);
+
+    try {
+      // Write allowed_signers file: namespace key
+      fs.writeFileSync(allowedSigners, `YaroAdminUI-Auth ${publicKey}\n`);
+
+      // Normalize signature: strip existing headers if user pasted full PEM
+      let cleanSig = signature
+        .replace(/-----BEGIN SSH SIGNATURE-----/g, "")
+        .replace(/-----END SSH SIGNATURE-----/g, "")
+        .trim();
+      fs.writeFileSync(sigFile, `-----BEGIN SSH SIGNATURE-----\n${cleanSig}\n-----END SSH SIGNATURE-----\n`);
+
+      // Write message
+      fs.writeFileSync(msgFile, message);
+
+      await new Promise((resolve, reject) => {
+        exec(
+          `ssh-keygen -Y verify -f "${allowedSigners}" -I "${publicKey.split(/\s+/)[2] || "admin"}" -n YaroAdminUI-Auth -s "${sigFile}" < "${msgFile}"`,
+          { timeout: 10000 },
+          (err, stdout, stderr) => {
+            if (err) reject(new Error("Signature verification failed"));
+            else resolve();
+          }
+        );
+      });
+    } finally {
+      // Cleanup temp files
+      try { fs.unlinkSync(allowedSigners); } catch {}
+      try { fs.unlinkSync(sigFile); } catch {}
+      try { fs.unlinkSync(msgFile); } catch {}
+    }
+
     const username = "admin";
     await db.addUser(username);
     const device = { name: req.headers["user-agent"] || "Unknown", ip: req.ip || req.connection?.remoteAddress || "Unknown" };
     const token = jwt.sign({ username, device }, JWT_SECRET, { expiresIn: "24h" });
     res.json({ token, username, device });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    res.status(401).json({ message: err.message || "Authentication failed" });
   }
 });
 
-app.post("/api/auth/telegram-verify", async (req, res) => {
+app.post("/api/auth/telegram-verify", rateLimitAuth, async (req, res) => {
   try {
     const { code } = req.body;
+    if (!code || typeof code !== "string" || code.trim().length === 0) {
+      return res.status(400).json({ message: "Code required" });
+    }
+
+    const record = await db.verifyAuthCode(code.trim().toUpperCase());
+    if (!record) {
+      return res.status(401).json({ message: "Invalid or expired code" });
+    }
+
     const username = "admin";
+    await db.addUser(username);
     const device = { name: req.headers["user-agent"] || "Unknown", ip: req.ip || req.connection?.remoteAddress || "Unknown" };
     const token = jwt.sign({ username, device }, JWT_SECRET, { expiresIn: "24h" });
     res.json({ token, username, device });
@@ -523,19 +650,10 @@ app.post("/api/auth/webauthn-authenticate", async (req, res) => {
   }
 });
 
-app.post("/api/auth/webauthn-verify", async (req, res) => {
+app.post("/api/auth/webauthn-verify", rateLimitAuth, async (req, res) => {
   try {
-    const { username, assertion } = req.body;
-    if (!username) {
-      return res.status(400).json({ message: "Username required" });
-    }
-
-    // For now, accept any valid WebAuthn assertion
-    // In production, verify the assertion against stored credentials
-    await db.addUser(username);
-    const device = { name: req.headers["user-agent"] || "Unknown", ip: req.ip || req.connection?.remoteAddress || "Unknown" };
-    const token = jwt.sign({ username, device }, JWT_SECRET, { expiresIn: "24h" });
-    res.json({ token, username, device });
+    // WebAuthn is not fully implemented — do not issue tokens
+    return res.status(501).json({ message: "WebAuthn authentication is not yet implemented. Use SSH or Telegram." });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
@@ -1291,8 +1409,13 @@ app.post("/api/server/execute", verifyToken, async (req, res) => {
           break;
 
         case "firewall":
-          const port = args[0];
+          const portRaw = args[0];
           const action = args[1] || "allow";
+          // Sanitize port: must be a number (1-65535) or port range (e.g. 8000:9000)
+          const port = String(portRaw);
+          if (!/^(\d{1,5})(:\d{1,5})?$/.test(port) || parseInt(port.split(":")[0]) > 65535 || (port.includes(":") && parseInt(port.split(":")[1]) > 65535)) {
+            return res.status(400).json({ success: false, message: "Invalid port format" });
+          }
           console.log("FIREWALL REQUEST:", { port, action, args });
 
           if (action === "allow" || action === "open") {

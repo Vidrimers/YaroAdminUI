@@ -325,83 +325,9 @@ class UIController {
   }
 
   // ==================== WEBAUTHN AUTH ====================
+  // WebAuthn is not yet implemented — tab is disabled in UI
   setupWebAuthnAuth() {
-    const form = document.getElementById("webauthnAuthForm");
-    const registerBtn = document.getElementById("webauthnRegisterBtn");
-    const usernameInput = document.getElementById("username");
-
-    registerBtn.addEventListener("click", async () => {
-      const username = usernameInput.value;
-      if (!username) {
-        this.toast.warning("Введите имя пользователя");
-        return;
-      }
-
-      try {
-        const response = await this.api.webauthnRegister(username);
-        const options = response.options;
-
-        // Преобразуем буферы
-        options.challenge = new Uint8Array(
-          atob(options.challenge)
-            .split("")
-            .map((c) => c.charCodeAt(0))
-        );
-        options.user.id = new Uint8Array(
-          atob(options.user.id)
-            .split("")
-            .map((c) => c.charCodeAt(0))
-        );
-
-        const credential = await navigator.credentials.create({
-          publicKey: options,
-        });
-
-        if (!credential) {
-          this.toast.error("Регистрация отменена");
-          return;
-        }
-
-        const attestationObject = new Uint8Array(
-          credential.response.attestationObject
-        );
-        const clientDataJSON = new Uint8Array(
-          credential.response.clientDataJSON
-        );
-
-        // Отправляем регистрацию на сервер
-        // (требуется реализация на сервере)
-        this.toast.success("WebAuthn ключ зарегистрирован!");
-      } catch (error) {
-        this.toast.error("Ошибка регистрации: " + error.message);
-      }
-    });
-
-    form.addEventListener("submit", async (e) => {
-      e.preventDefault();
-      const username = usernameInput.value;
-
-      if (!username) {
-        this.toast.warning("Введите имя пользователя");
-        return;
-      }
-
-      try {
-        // Get token from server
-        const response = await this.api.request(
-          "/auth/webauthn-verify",
-          "POST",
-          { username }
-        );
-
-        // Use the token from server response
-        this.auth.setAuth(response.token, response.username, response.device);
-        this.showDashboard();
-        this.toast.success("WebAuthn вход успешен!");
-      } catch (error) {
-        this.toast.error("Ошибка: " + error.message);
-      }
-    });
+    // No-op: WebAuthn tab is disabled
   }
 
   // ==================== TELEGRAM AUTH ====================

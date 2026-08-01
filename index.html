@@ -13,12 +13,12 @@
       <div class="auth-container">
         <div class="auth-header">
           <h1>🔐 YaroAdminUI</h1>
-          <p>Вход через SSH-ключ или WebAuthn</p>
+          <p>Вход через SSH-ключ или Telegram</p>
         </div>
 
         <div class="auth-tabs">
           <button class="auth-tab active" data-tab="ssh-auth">SSH Ключ</button>
-          <button class="auth-tab" data-tab="webauthn-auth">WebAuthn</button>
+          <button class="auth-tab" data-tab="webauthn-auth" disabled title="Скоро будет доступно">WebAuthn (скоро)</button>
           <button class="auth-tab" data-tab="telegram-auth">Telegram</button>
         </div>
 
@@ -56,30 +56,12 @@
           </form>
         </div>
 
-        <!-- WebAuthn Auth Tab -->
+        <!-- WebAuthn Auth Tab (not yet implemented) -->
         <div id="webauthn-auth" class="auth-tab-content">
-          <form id="webauthnAuthForm" class="auth-form">
-            <div class="form-group">
-              <label for="username">Имя пользователя:</label>
-              <input
-                type="text"
-                id="username"
-                class="form-control"
-                placeholder="admin"
-              />
-            </div>
-
-            <button
-              type="button"
-              id="webauthnRegisterBtn"
-              class="btn btn-secondary btn-block"
-            >
-              Зарегистрировать ключ
-            </button>
-            <button type="submit" class="btn btn-success btn-block">
-              Вход WebAuthn
-            </button>
-          </form>
+          <div class="telegram-auth-info">
+            <p>🔑 WebAuthn пока не реализован.</p>
+            <p>Используйте SSH-ключ или Telegram для входа.</p>
+          </div>
         </div>
 
         <!-- Telegram Auth Tab -->
