@@ -3340,7 +3340,7 @@ bot.on('callback_query', async (query) => {
     
     // Обычный Pull & Run
     try {
-      bot.sendMessage(chatId, `🔄 Обновляю ${processName} на Rus...`);
+      bot.sendMessage(chatId, `🔄 Обновляю <b>${processName}</b> на Rus...\n\n⏳ Шаг 1/3: Получаю информацию о процессе...`, { parse_mode: 'HTML' });
       const processInfo = await executeSSHCommand('export PATH=$PATH:/usr/local/bin:/usr/bin:~/.npm-global/bin:~/.nvm/versions/node/*/bin && pm2 jlist 2>/dev/null', RUS_IP);
       let workDir = '';
       try {
@@ -3354,12 +3354,19 @@ bot.on('callback_query', async (query) => {
         return;
       }
       
+      bot.sendMessage(chatId, `⏳ Шаг 2/3: Обновляю код из репозитория...\nДиректория: ${workDir}`);
       const pullOutput = await executeSSHCommand(`cd ${workDir} && git pull origin master 2>&1`, RUS_IP);
+      bot.sendMessage(chatId, `📥 Git pull:\n<code>${escapeHtml(pullOutput.substring(0, 500))}</code>`, { parse_mode: 'HTML' });
+      
       if (pullOutput.includes('package.json') || pullOutput.includes('package-lock.json')) {
-        await executeSSHCommand(`cd ${workDir} && npm install 2>&1`, RUS_IP);
+        bot.sendMessage(chatId, `⏳ Обнаружены изменения в зависимостях, выполняю npm install...`);
+        const npmOutput = await executeSSHCommand(`cd ${workDir} && npm install 2>&1`, RUS_IP);
+        bot.sendMessage(chatId, `📦 NPM install завершен`);
       }
+      
+      bot.sendMessage(chatId, `⏳ Шаг 3/3: Перезапускаю процесс...`);
       await executeSSHCommand(`export PATH=$PATH:/usr/local/bin:/usr/bin:~/.npm-global/bin:~/.nvm/versions/node/*/bin && pm2 restart ${processName}`, RUS_IP);
-      bot.sendMessage(chatId, `✅ ${processName} обновлён и перезапущен на Rus!`, { reply_markup: getRusPm2Keyboard() });
+      bot.sendMessage(chatId, `✅ Процесс ${processName} успешно обновлен и перезапущен на Rus!`, { reply_markup: getRusPm2Keyboard() });
     } catch (error) {
       bot.sendMessage(chatId, `❌ Ошибка: ${error.message}`, { reply_markup: getRusPm2Keyboard() });
     }
