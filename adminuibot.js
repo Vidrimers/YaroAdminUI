@@ -552,6 +552,9 @@ function getMenuInlineKeyboard() {
         { text: '🔧 Другие процессы', callback_data: 'menu_other' }
       ],
       [
+        { text: '🎮 ArchiSteamFarm', callback_data: 'menu_asf' }
+      ],
+      [
         { text: '💾 Диск', callback_data: 'menu_disk' }
       ],
       [
@@ -599,6 +602,28 @@ function getRusPm2Keyboard() {
       ],
       [
         { text: '⬅️ Назад', callback_data: 'menu_rus' }
+      ]
+    ]
+  };
+}
+
+// ASF submenu
+function getAsfKeyboard(autostartEnabled) {
+  const autostartLabel = autostartEnabled ? '🟢 Автозапуск ВКЛ' : '🔴 Автозапуск ВЫКЛ';
+  return {
+    inline_keyboard: [
+      [
+        { text: '▶️ Запустить', callback_data: 'asf_start' },
+        { text: '⏹️ Остановить', callback_data: 'asf_stop' }
+      ],
+      [
+        { text: '📋 Статус', callback_data: 'asf_status' }
+      ],
+      [
+        { text: autostartLabel, callback_data: 'asf_toggle_autostart' }
+      ],
+      [
+        { text: '⬅️ Назад', callback_data: 'menu_back' }
       ]
     ]
   };
@@ -820,6 +845,146 @@ bot.on('callback_query', async (query) => {
     case 'menu_help':
       bot.emit('message', { chat: { id: chatId }, from: { id: userId }, text: '/help' });
       break;
+
+    // ============ ASF MENU ============
+    case 'menu_asf': {
+      try {
+        const statusOutput = await executeSSHCommand('systemctl is-active asf 2>/dev/null || echo "inactive"');
+        const autostartOutput = await executeSSHCommand('systemctl is-enabled asf 2>/dev/null || echo "disabled"');
+        const isActive = statusOutput.trim() === 'active';
+        const isAutostart = autostartOutput.trim() === 'enabled';
+
+        const statusIcon = isActive ? '🟢 Работает' : '🔴 Остановлен';
+        const autostartIcon = isAutostart ? '🟢 Вкл' : '🔴 Выкл';
+
+        bot.editMessageText(
+          `🎮 <b>ArchiSteamFarm</b>\n\n` +
+          `📊 Статус: ${statusIcon}\n` +
+          `🔄 Автозапуск: ${autostartIcon}\n` +
+          `🌐 IP: ${SERVER_IP}\n` +
+          `🔌 Порт: 1242\n` +
+          `🔗 URL: http://${SERVER_IP}:1242`,
+          {
+            chat_id: chatId,
+            message_id: query.message.message_id,
+            parse_mode: 'HTML',
+            reply_markup: getAsfKeyboard(isAutostart)
+          }
+        );
+      } catch (err) {
+        bot.editMessageText(
+          `🎮 <b>ArchiSteamFarm</b>\n\n❌ Ошибка получения статуса: ${escapeHtml(err.message)}\n\n` +
+          `🌐 IP: ${SERVER_IP}\n🔌 Порт: 1242`,
+          {
+            chat_id: chatId,
+            message_id: query.message.message_id,
+            parse_mode: 'HTML',
+            reply_markup: getAsfKeyboard(false)
+          }
+        );
+      }
+      break;
+    }
+
+    case 'asf_start': {
+      try {
+        await executeSSHCommand('systemctl start asf');
+        bot.answerCallbackQuery(query.id, { text: '✅ ArchiSteamFarm запущен' });
+        const autostartOutput = await executeSSHCommand('systemctl is-enabled asf 2>/dev/null || echo "disabled"');
+        const isAutostart = autostartOutput.trim() === 'enabled';
+        bot.editMessageText(
+          `🎮 <b>ArchiSteamFarm</b>\n\n` +
+          `📊 Статус: 🟢 Работает\n` +
+          `🔄 Автозапуск: ${isAutostart ? '🟢 Вкл' : '🔴 Выкл'}\n` +
+          `🌐 IP: ${SERVER_IP}\n` +
+          `🔌 Порт: 1242\n` +
+          `🔗 URL: http://${SERVER_IP}:1242`,
+          {
+            chat_id: chatId,
+            message_id: query.message.message_id,
+            parse_mode: 'HTML',
+            reply_markup: getAsfKeyboard(isAutostart)
+          }
+        );
+      } catch (err) {
+        bot.answerCallbackQuery(query.id, { text: '❌ Ошибка: ' + err.message, show_alert: true });
+      }
+      break;
+    }
+
+    case 'asf_stop': {
+      try {
+        await executeSSHCommand('systemctl stop asf');
+        bot.answerCallbackQuery(query.id, { text: '✅ ArchiSteamFarm остановлен' });
+        const autostartOutput = await executeSSHCommand('systemctl is-enabled asf 2>/dev/null || echo "disabled"');
+        const isAutostart = autostartOutput.trim() === 'enabled';
+        bot.editMessageText(
+          `🎮 <b>ArchiSteamFarm</b>\n\n` +
+          `📊 Статус: 🔴 Остановлен\n` +
+          `🔄 Автозапуск: ${isAutostart ? '🟢 Вкл' : '🔴 Выкл'}\n` +
+          `🌐 IP: ${SERVER_IP}\n` +
+          `🔌 Порт: 1242\n` +
+          `🔗 URL: http://${SERVER_IP}:1242`,
+          {
+            chat_id: chatId,
+            message_id: query.message.message_id,
+            parse_mode: 'HTML',
+            reply_markup: getAsfKeyboard(isAutostart)
+          }
+        );
+      } catch (err) {
+        bot.answerCallbackQuery(query.id, { text: '❌ Ошибка: ' + err.message, show_alert: true });
+      }
+      break;
+    }
+
+    case 'asf_toggle_autostart': {
+      try {
+        const current = await executeSSHCommand('systemctl is-enabled asf 2>/dev/null || echo "disabled"');
+        if (current.trim() === 'enabled') {
+          await executeSSHCommand('systemctl disable asf');
+          bot.answerCallbackQuery(query.id, { text: '🔴 Автозапуск отключён' });
+        } else {
+          await executeSSHCommand('systemctl enable asf');
+          bot.answerCallbackQuery(query.id, { text: '🟢 Автозапуск включён' });
+        }
+        const statusOutput = await executeSSHCommand('systemctl is-active asf 2>/dev/null || echo "inactive"');
+        const autostartOutput = await executeSSHCommand('systemctl is-enabled asf 2>/dev/null || echo "disabled"');
+        const isActive = statusOutput.trim() === 'active';
+        const isAutostart = autostartOutput.trim() === 'enabled';
+        bot.editMessageText(
+          `🎮 <b>ArchiSteamFarm</b>\n\n` +
+          `📊 Статус: ${isActive ? '🟢 Работает' : '🔴 Остановлен'}\n` +
+          `🔄 Автозапуск: ${isAutostart ? '🟢 Вкл' : '🔴 Выкл'}\n` +
+          `🌐 IP: ${SERVER_IP}\n` +
+          `🔌 Порт: 1242\n` +
+          `🔗 URL: http://${SERVER_IP}:1242`,
+          {
+            chat_id: chatId,
+            message_id: query.message.message_id,
+            parse_mode: 'HTML',
+            reply_markup: getAsfKeyboard(isAutostart)
+          }
+        );
+      } catch (err) {
+        bot.answerCallbackQuery(query.id, { text: '❌ Ошибка: ' + err.message, show_alert: true });
+      }
+      break;
+    }
+
+    case 'asf_status': {
+      try {
+        const output = await executeSSHCommand('systemctl status asf --no-pager');
+        const truncated = output.length > 3500 ? output.substring(0, 3500) + '\n... (обрезано)' : output;
+        bot.sendMessage(chatId, `📋 <b>ArchiSteamFarm — Статус:</b>\n\n<pre>${escapeHtml(truncated)}</pre>`, {
+          parse_mode: 'HTML',
+          reply_markup: getAsfKeyboard((await executeSSHCommand('systemctl is-enabled asf 2>/dev/null || echo "disabled"')).trim() === 'enabled')
+        });
+      } catch (err) {
+        bot.sendMessage(chatId, `❌ Ошибка: ${err.message}`);
+      }
+      break;
+    }
 
     // ============ HOME MENU ============
     case 'menu_home':
