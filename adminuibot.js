@@ -3036,6 +3036,39 @@ bot.on('callback_query', async (query) => {
     }
     // ---- Конец кастомного деплоя vidrimers ----
 
+    // ---- Кастомный деплой для vpn-api (git pull + deploy.sh + pm2 restart) ----
+    if (processName === 'vpn-api') {
+      try {
+        bot.sendMessage(chatId, `🔄 Деплой <b>vpn-api</b>...\n\n⏳ Шаг 1/3: git pull...`, { parse_mode: 'HTML' });
+
+        const pullOutput = await executeSSHCommand(
+          `cd /home/xray-vpn && git pull origin master 2>&1`
+        );
+        bot.sendMessage(chatId, `📥 Git pull:\n<code>${escapeHtml(pullOutput.substring(0, 500))}</code>`, { parse_mode: 'HTML' });
+
+        bot.sendMessage(chatId, `⏳ Шаг 2/3: Генерация Xray конфига (deploy.sh)...`);
+        const deployOutput = await executeSSHCommand(
+          `bash /home/xray-vpn/scripts/deploy.sh 2>&1`
+        );
+        bot.sendMessage(chatId, `⚙️ Deploy:\n<code>${escapeHtml(deployOutput.substring(0, 2000))}</code>`, { parse_mode: 'HTML' });
+
+        bot.sendMessage(chatId, `⏳ Шаг 3/3: Перезапуск vpn-api...`);
+        await executeSSHCommand(
+          `export PATH=$PATH:/usr/local/bin:/usr/bin:~/.npm-global/bin:~/.nvm/versions/node/*/bin && pm2 restart vpn-api`
+        );
+
+        bot.sendMessage(chatId, `✅ vpn-api обновлён!\n\n1. ✅ git pull\n2. ✅ Xray config обновлён\n3. ✅ pm2 restart`, {
+          reply_markup: getMenuInlineKeyboard()
+        });
+      } catch (error) {
+        bot.sendMessage(chatId, `❌ Ошибка деплоя vpn-api: ${error.message}`, {
+          reply_markup: getMenuInlineKeyboard()
+        });
+      }
+      return;
+    }
+    // ---- Конец кастомного деплоя vpn-api ----
+
     // ---- Кастомный деплой для watchrebel-telegram ----
     if (processName === 'watchrebel-telegram') {
       try {
