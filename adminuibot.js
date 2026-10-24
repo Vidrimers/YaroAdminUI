@@ -3103,6 +3103,30 @@ bot.on('callback_query', async (query) => {
       return;
     }
 
+    // ---- Кастомный деплой для duo-bot ----
+    if (processName === 'duo-bot') {
+      try {
+        bot.sendMessage(chatId, `🔄 Запускаю деплой <b>duo-bot</b>...\n\n⏳ Шаг 1/3: git pull...`, { parse_mode: 'HTML' });
+        const pullOutput = await executeSSHCommand('cd /home/duolingo-helper && git pull origin master 2>&1');
+        bot.sendMessage(chatId, `📥 Git pull:\n<code>${escapeHtml(pullOutput.substring(0, 500))}</code>`, { parse_mode: 'HTML' });
+
+        bot.sendMessage(chatId, `⏳ Шаг 2/3: npm install...`);
+        const installOutput = await executeSSHCommand('cd /home/duolingo-helper/bot && npm install 2>&1');
+        bot.sendMessage(chatId, `📦 Install:\n<code>${escapeHtml(installOutput.substring(0, 500))}</code>`, { parse_mode: 'HTML' });
+
+        bot.sendMessage(chatId, `⏳ Шаг 3/3: pm2 restart duo-bot...`);
+        await executeSSHCommand('export PATH=$PATH:/usr/local/bin:/usr/bin:~/.npm-global/bin:~/.nvm/versions/node/*/bin && pm2 restart duo-bot');
+
+        bot.sendMessage(chatId, `✅ duo-bot обновлён и перезапущен!\n\n1. ✅ git pull\n2. ✅ npm install\n3. ✅ pm2 restart`, {
+          reply_markup: getMenuInlineKeyboard()
+        });
+      } catch (error) {
+        bot.sendMessage(chatId, `❌ Ошибка деплоя: ${error.message}`, { reply_markup: getMenuInlineKeyboard() });
+      }
+      return;
+    }
+    // ---- Конец кастомного деплоя duo-bot ----
+
     try {
       bot.sendMessage(chatId, `🔄 Обновляю и перезапускаю процесс ${processName}...\n\n⏳ Шаг 1/3: Получаю информацию о процессе...`);
       
