@@ -205,7 +205,8 @@ const DEFAULT_PM2_PROCESSES = [
   { name: 'ytdownload', pm_id: 6, status: 'online' },
   { name: 'meowgang-bot', pm_id: 7, status: 'online' },
   { name: 'watchrebel-server', pm_id: 8, status: 'online' },
-  { name: 'watchrebel-telegram', pm_id: 9, status: 'online' }
+  { name: 'watchrebel-telegram', pm_id: 9, status: 'online' },
+  { name: 'duo-bot', pm_id: 18, status: 'online' }
 ];
 
 const DEFAULT_PM2_PROCESSES_RUS = [
