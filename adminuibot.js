@@ -156,8 +156,25 @@ async function initBot() {
     await new Promise(resolve => setTimeout(resolve, 2000));
   }
 
-  bot = new TelegramBot(TELEGRAM_BOT_TOKEN, { polling: true });
+  bot = new TelegramBot(TELEGRAM_BOT_TOKEN, { polling: true, request: { timeout: 75000 } });
   db = new DB(DB_PATH);
+
+  // Ошибки поллинга — в лог (иначе либа пишет сырой JSON)
+  bot.on('polling_error', (err) => {
+    console.error('[BOT] polling_error:', (err && (err.message || err.code)) || String(err));
+  });
+
+  // Страховка: если поллинг остановился — поднимаем его
+  setInterval(() => {
+    try {
+      if (bot && !bot.isPolling()) {
+        console.log('[BOT] Polling is not active — restarting');
+        bot.startPolling().catch((e) => console.error('[BOT] startPolling failed:', e.message));
+      }
+    } catch (e) {
+      console.error('[BOT] Polling watchdog error:', e.message);
+    }
+  }, 120000);
 
   // Set menu button next to attachment button
   try {
